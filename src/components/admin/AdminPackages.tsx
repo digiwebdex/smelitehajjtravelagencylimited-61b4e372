@@ -728,87 +728,66 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
           </Dialog>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Order</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {packages.map((pkg, idx) => {
-                const sameType = packages.filter((p) => p.type === pkg.type);
-                const sameIdx = sameType.findIndex((p) => p.id === pkg.id);
-                return (
-                <TableRow key={pkg.id}>
-                  <TableCell>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <AdminActionButton
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => moveOrder(pkg, "up")}
-                        disabled={sameIdx === 0}
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </AdminActionButton>
-                      <span className="text-xs text-muted-foreground">{sameIdx + 1}</span>
-                      <AdminActionButton
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => moveOrder(pkg, "down")}
-                        disabled={sameIdx === sameType.length - 1}
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </AdminActionButton>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">{pkg.title}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {pkg.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-bold">{formatCurrency(pkg.price)}</TableCell>
-                  <TableCell>{pkg.duration_days} days</TableCell>
-                  <TableCell>{pkg.stock}</TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={pkg.is_active}
-                      onCheckedChange={() => toggleActive(pkg.id, pkg.is_active)}
-                      disabled={isViewerMode}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <AdminActionButton variant="ghost" size="icon" onClick={() => handleEdit(pkg)}>
-                        <Edit className="w-4 h-4" />
-                      </AdminActionButton>
-                      <AdminActionButton
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive"
-                        onClick={() => handleDelete(pkg.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </AdminActionButton>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+      <CardContent className="space-y-8">
+        {(["hajj", "umrah"] as const).map((groupType) => {
+          const groupPackages = packages.filter((p) => p.type === groupType);
+          return (
+            <div key={groupType}>
+              <h3 className="font-semibold text-lg mb-3 capitalize">
+                {groupType} Packages ({groupPackages.length})
+                <span className="text-xs font-normal text-muted-foreground ml-2">
+                  — drag the handle to reorder
+                </span>
+              </h3>
+              <div className="overflow-x-auto">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e) => handleDragEnd(e, groupType)}
+                >
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Stock</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <SortableContext
+                      items={groupPackages.map((p) => p.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <TableBody>
+                        {groupPackages.map((pkg) => (
+                          <SortableRow
+                            key={pkg.id}
+                            pkg={pkg}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onToggleActive={toggleActive}
+                            isViewerMode={isViewerMode}
+                          />
+                        ))}
+                        {groupPackages.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                              No {groupType} packages yet
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </SortableContext>
+                  </Table>
+                </DndContext>
+              </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
