@@ -61,6 +61,7 @@ interface Package {
   hotel_image_url: string | null;
   hotel_map_link: string | null;
   pdf_url: string | null;
+  order_index: number;
 }
 
 interface AdminPackagesProps {
