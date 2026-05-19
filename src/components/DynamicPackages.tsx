@@ -329,8 +329,9 @@ const DynamicPackages = ({ type }: DynamicPackagesProps) => {
           return b.duration_days - a.duration_days;
         case "rating-desc":
           return (b.hotel_rating || 0) - (a.hotel_rating || 0);
+        case "default":
         default:
-          return 0;
+          return ((a as any).order_index ?? 0) - ((b as any).order_index ?? 0);
       }
     });
   }, [packages, sortBy]);
