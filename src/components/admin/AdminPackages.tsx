@@ -142,22 +142,47 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
     setLoading(false);
   };
 
-  const moveOrder = async (pkg: Package, direction: "up" | "down") => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent, type: "hajj" | "umrah") => {
     if (isViewerMode) return;
-    const sameType = packages.filter((p) => p.type === pkg.type);
-    const idx = sameType.findIndex((p) => p.id === pkg.id);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sameType.length) return;
-    const other = sameType[swapIdx];
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const a = pkg.order_index ?? 0;
-    const b = other.order_index ?? 0;
-    const tmp = -Math.abs(Math.max(a, b)) - 1000;
+    const sameType = packages.filter((p) => p.type === type);
+    const oldIndex = sameType.findIndex((p) => p.id === active.id);
+    const newIndex = sameType.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    const { error: e1 } = await supabase.from("packages").update({ order_index: tmp }).eq("id", pkg.id);
-    if (e1) { toast({ title: "Error", description: e1.message, variant: "destructive" }); return; }
-    await supabase.from("packages").update({ order_index: a }).eq("id", other.id);
-    await supabase.from("packages").update({ order_index: b }).eq("id", pkg.id);
+    const reordered = arrayMove(sameType, oldIndex, newIndex);
+    const updated = reordered.map((p, idx) => ({ ...p, order_index: idx + 1 }));
+
+    // Optimistic local update
+    const others = packages.filter((p) => p.type !== type);
+    setPackages([...others, ...updated].sort((a, b) => {
+      const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
+      const tr = typeRank(a.type) - typeRank(b.type);
+      if (tr !== 0) return tr;
+      return (a.order_index ?? 0) - (b.order_index ?? 0);
+    }));
+
+    try {
+      await Promise.all(
+        updated.map((p) =>
+          supabase.from("packages").update({ order_index: p.order_index }).eq("id", p.id)
+        )
+      );
+      toast({ title: "Order updated" });
+      onUpdate();
+    } catch (err: any) {
+      toast({ title: "Error", description: "Failed to save new order", variant: "destructive" });
+      fetchPackages();
+    }
+  };
+
 
     setPackages((prev) => {
       const updated = prev.map((p) => {
