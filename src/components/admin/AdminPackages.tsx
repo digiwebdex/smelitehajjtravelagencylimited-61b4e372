@@ -183,23 +183,6 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
     }
   };
 
-
-    setPackages((prev) => {
-      const updated = prev.map((p) => {
-        if (p.id === pkg.id) return { ...p, order_index: b };
-        if (p.id === other.id) return { ...p, order_index: a };
-        return p;
-      });
-      return [...updated].sort((x, y) => {
-        const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
-        const tr = typeRank(x.type) - typeRank(y.type);
-        if (tr !== 0) return tr;
-        return (x.order_index ?? 0) - (y.order_index ?? 0);
-      });
-    });
-    onUpdate();
-  };
-
   const resetForm = () => {
     setFormData({
       title: "",
