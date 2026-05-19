@@ -110,13 +110,52 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
   const fetchPackages = async () => {
     const { data, error } = await getTenantPackages({
       activeOnly: false,
-      orderBy: { column: "created_at", ascending: false },
     });
 
     if (!error && data) {
-      setPackages(data);
+      // Sort: Hajj first, then Umrah; within each group by order_index asc
+      const sorted = [...data].sort((a: any, b: any) => {
+        const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
+        const tr = typeRank(a.type) - typeRank(b.type);
+        if (tr !== 0) return tr;
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+      });
+      setPackages(sorted);
     }
     setLoading(false);
+  };
+
+  const moveOrder = async (pkg: Package, direction: "up" | "down") => {
+    if (isViewerMode) return;
+    const sameType = packages.filter((p) => p.type === pkg.type);
+    const idx = sameType.findIndex((p) => p.id === pkg.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sameType.length) return;
+    const other = sameType[swapIdx];
+
+    const a = pkg.order_index ?? 0;
+    const b = other.order_index ?? 0;
+    const tmp = -Math.abs(Math.max(a, b)) - 1000;
+
+    const { error: e1 } = await supabase.from("packages").update({ order_index: tmp }).eq("id", pkg.id);
+    if (e1) { toast({ title: "Error", description: e1.message, variant: "destructive" }); return; }
+    await supabase.from("packages").update({ order_index: a }).eq("id", other.id);
+    await supabase.from("packages").update({ order_index: b }).eq("id", pkg.id);
+
+    setPackages((prev) => {
+      const updated = prev.map((p) => {
+        if (p.id === pkg.id) return { ...p, order_index: b };
+        if (p.id === other.id) return { ...p, order_index: a };
+        return p;
+      });
+      return [...updated].sort((x, y) => {
+        const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
+        const tr = typeRank(x.type) - typeRank(y.type);
+        if (tr !== 0) return tr;
+        return (x.order_index ?? 0) - (y.order_index ?? 0);
+      });
+    });
+    onUpdate();
   };
 
   const resetForm = () => {
