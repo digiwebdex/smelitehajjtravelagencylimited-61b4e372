@@ -85,6 +85,66 @@ interface AdminPackagesProps {
   onUpdate: () => void;
 }
 
+interface SortableRowProps {
+  pkg: Package;
+  onEdit: (pkg: Package) => void;
+  onDelete: (id: string) => void;
+  onToggleActive: (id: string, current: boolean) => void;
+  isViewerMode: boolean;
+}
+
+const SortableRow = ({ pkg, onEdit, onDelete, onToggleActive, isViewerMode }: SortableRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: pkg.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      <TableCell className="w-10">
+        <button
+          className="cursor-grab active:cursor-grabbing touch-none p-1 hover:bg-muted rounded"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="w-4 h-4 text-muted-foreground" />
+        </button>
+      </TableCell>
+      <TableCell className="font-medium">{pkg.title}</TableCell>
+      <TableCell>
+        <Badge variant="outline" className="capitalize">{pkg.type}</Badge>
+      </TableCell>
+      <TableCell className="font-bold">{formatCurrency(pkg.price)}</TableCell>
+      <TableCell>{pkg.duration_days} days</TableCell>
+      <TableCell>{pkg.stock}</TableCell>
+      <TableCell>
+        <Switch
+          checked={pkg.is_active}
+          onCheckedChange={() => onToggleActive(pkg.id, pkg.is_active)}
+          disabled={isViewerMode}
+        />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <AdminActionButton variant="ghost" size="icon" onClick={() => onEdit(pkg)}>
+            <Edit className="w-4 h-4" />
+          </AdminActionButton>
+          <AdminActionButton
+            variant="ghost"
+            size="icon"
+            className="text-destructive"
+            onClick={() => onDelete(pkg.id)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </AdminActionButton>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
   const { toast } = useToast();
   const { isViewerMode } = useViewerMode();
