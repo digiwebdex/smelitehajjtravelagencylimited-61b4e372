@@ -49,7 +49,7 @@ interface DynamicPackagesProps {
   type: "hajj" | "umrah";
 }
 
-type SortOption = "price-asc" | "price-desc" | "duration-asc" | "duration-desc" | "rating-desc";
+type SortOption = "default" | "price-asc" | "price-desc" | "duration-asc" | "duration-desc" | "rating-desc";
 
 const VISIBLE_FEATURES_COUNT = 6;
 
@@ -296,7 +296,7 @@ const DynamicPackages = ({ type }: DynamicPackagesProps) => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [comparePackages, setComparePackages] = useState<Package[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>("price-asc");
+  const [sortBy, setSortBy] = useState<SortOption>("default");
 
   const MAX_COMPARE = 3;
 
@@ -329,8 +329,9 @@ const DynamicPackages = ({ type }: DynamicPackagesProps) => {
           return b.duration_days - a.duration_days;
         case "rating-desc":
           return (b.hotel_rating || 0) - (a.hotel_rating || 0);
+        case "default":
         default:
-          return 0;
+          return ((a as any).order_index ?? 0) - ((b as any).order_index ?? 0);
       }
     });
   }, [packages, sortBy]);
@@ -476,6 +477,7 @@ const DynamicPackages = ({ type }: DynamicPackagesProps) => {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="bg-background border">
+              <SelectItem value="default">Recommended</SelectItem>
               <SelectItem value="price-asc">Price: Low to High</SelectItem>
               <SelectItem value="price-desc">Price: High to Low</SelectItem>
               <SelectItem value="duration-asc">Duration: Shortest</SelectItem>

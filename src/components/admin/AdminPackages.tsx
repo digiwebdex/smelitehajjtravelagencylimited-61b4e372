@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Lock, Upload, FileText, X } from "lucide-react";
+import { Plus, Edit, Trash2, Lock, Upload, FileText, X, ArrowUp, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, CURRENCY } from "@/lib/currency";
 import ImageUpload from "./ImageUpload";
@@ -61,6 +61,7 @@ interface Package {
   hotel_image_url: string | null;
   hotel_map_link: string | null;
   pdf_url: string | null;
+  order_index: number;
 }
 
 interface AdminPackagesProps {
@@ -109,13 +110,52 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
   const fetchPackages = async () => {
     const { data, error } = await getTenantPackages({
       activeOnly: false,
-      orderBy: { column: "created_at", ascending: false },
     });
 
     if (!error && data) {
-      setPackages(data);
+      // Sort: Hajj first, then Umrah; within each group by order_index asc
+      const sorted = [...data].sort((a: any, b: any) => {
+        const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
+        const tr = typeRank(a.type) - typeRank(b.type);
+        if (tr !== 0) return tr;
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+      });
+      setPackages(sorted);
     }
     setLoading(false);
+  };
+
+  const moveOrder = async (pkg: Package, direction: "up" | "down") => {
+    if (isViewerMode) return;
+    const sameType = packages.filter((p) => p.type === pkg.type);
+    const idx = sameType.findIndex((p) => p.id === pkg.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sameType.length) return;
+    const other = sameType[swapIdx];
+
+    const a = pkg.order_index ?? 0;
+    const b = other.order_index ?? 0;
+    const tmp = -Math.abs(Math.max(a, b)) - 1000;
+
+    const { error: e1 } = await supabase.from("packages").update({ order_index: tmp }).eq("id", pkg.id);
+    if (e1) { toast({ title: "Error", description: e1.message, variant: "destructive" }); return; }
+    await supabase.from("packages").update({ order_index: a }).eq("id", other.id);
+    await supabase.from("packages").update({ order_index: b }).eq("id", pkg.id);
+
+    setPackages((prev) => {
+      const updated = prev.map((p) => {
+        if (p.id === pkg.id) return { ...p, order_index: b };
+        if (p.id === other.id) return { ...p, order_index: a };
+        return p;
+      });
+      return [...updated].sort((x, y) => {
+        const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
+        const tr = typeRank(x.type) - typeRank(y.type);
+        if (tr !== 0) return tr;
+        return (x.order_index ?? 0) - (y.order_index ?? 0);
+      });
+    });
+    onUpdate();
   };
 
   const resetForm = () => {
@@ -608,6 +648,7 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16">Order</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Price</TableHead>
@@ -618,8 +659,34 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {packages.map((pkg) => (
+              {packages.map((pkg, idx) => {
+                const sameType = packages.filter((p) => p.type === pkg.type);
+                const sameIdx = sameType.findIndex((p) => p.id === pkg.id);
+                return (
                 <TableRow key={pkg.id}>
+                  <TableCell>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <AdminActionButton
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => moveOrder(pkg, "up")}
+                        disabled={sameIdx === 0}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </AdminActionButton>
+                      <span className="text-xs text-muted-foreground">{sameIdx + 1}</span>
+                      <AdminActionButton
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => moveOrder(pkg, "down")}
+                        disabled={sameIdx === sameType.length - 1}
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </AdminActionButton>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-medium">{pkg.title}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="capitalize">
@@ -652,7 +719,8 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
