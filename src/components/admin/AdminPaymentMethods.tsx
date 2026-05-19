@@ -416,6 +416,28 @@ const AdminPaymentMethods = () => {
                             />
                           </div>
                         )}
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => moveMethod(method, 'up')}
+                            disabled={paymentMethods.sort((a,b)=>a.order_index-b.order_index)[0]?.id === method.id}
+                            title="Move up"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => moveMethod(method, 'down')}
+                            disabled={[...paymentMethods].sort((a,b)=>a.order_index-b.order_index).slice(-1)[0]?.id === method.id}
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </Button>
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"
