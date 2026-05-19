@@ -296,7 +296,7 @@ const DynamicPackages = ({ type }: DynamicPackagesProps) => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [comparePackages, setComparePackages] = useState<Package[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>("price-asc");
+  const [sortBy, setSortBy] = useState<SortOption>("default");
 
   const MAX_COMPARE = 3;
 
