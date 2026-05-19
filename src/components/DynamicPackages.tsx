@@ -477,6 +477,7 @@ const DynamicPackages = ({ type }: DynamicPackagesProps) => {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="bg-background border">
+              <SelectItem value="default">Recommended</SelectItem>
               <SelectItem value="price-asc">Price: Low to High</SelectItem>
               <SelectItem value="price-desc">Price: High to Low</SelectItem>
               <SelectItem value="duration-asc">Duration: Shortest</SelectItem>
