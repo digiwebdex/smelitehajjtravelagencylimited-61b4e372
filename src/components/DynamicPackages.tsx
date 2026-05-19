@@ -49,7 +49,7 @@ interface DynamicPackagesProps {
   type: "hajj" | "umrah";
 }
 
-type SortOption = "price-asc" | "price-desc" | "duration-asc" | "duration-desc" | "rating-desc";
+type SortOption = "default" | "price-asc" | "price-desc" | "duration-asc" | "duration-desc" | "rating-desc";
 
 const VISIBLE_FEATURES_COUNT = 6;
 
