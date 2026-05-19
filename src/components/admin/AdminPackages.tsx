@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Lock, Upload, FileText, X } from "lucide-react";
+import { Plus, Edit, Trash2, Lock, Upload, FileText, X, ArrowUp, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, CURRENCY } from "@/lib/currency";
 import ImageUpload from "./ImageUpload";
