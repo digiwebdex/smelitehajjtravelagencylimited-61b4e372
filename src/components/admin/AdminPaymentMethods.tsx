@@ -218,6 +218,39 @@ const AdminPaymentMethods = () => {
     }
   };
 
+  const moveMethod = async (method: PaymentMethod, direction: 'up' | 'down') => {
+    const sorted = [...paymentMethods].sort((a, b) => a.order_index - b.order_index);
+    const idx = sorted.findIndex(m => m.id === method.id);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    const other = sorted[swapIdx];
+    const a = method.order_index;
+    const b = other.order_index;
+
+    try {
+      // Two-step swap to avoid unique-constraint conflicts if any
+      const tmp = -Math.abs(a) - 1000;
+      const { error: e1 } = await supabase.from("payment_methods").update({ order_index: tmp }).eq("id", method.id);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("payment_methods").update({ order_index: a }).eq("id", other.id);
+      if (e2) throw e2;
+      const { error: e3 } = await supabase.from("payment_methods").update({ order_index: b }).eq("id", method.id);
+      if (e3) throw e3;
+
+      setPaymentMethods(prev => prev.map(m => {
+        if (m.id === method.id) return { ...m, order_index: b };
+        if (m.id === other.id) return { ...m, order_index: a };
+        return m;
+      }));
+
+      toast({ title: "Reordered", description: `${method.name} moved ${direction}` });
+    } catch (error) {
+      console.error("Error reordering:", error);
+      toast({ title: "Error", description: "Failed to reorder", variant: "destructive" });
+    }
+  };
+
   const openConfigDialog = (method: PaymentMethod) => {
     setSelectedMethod(method);
     setEditedCredentials(method.credentials || {});
