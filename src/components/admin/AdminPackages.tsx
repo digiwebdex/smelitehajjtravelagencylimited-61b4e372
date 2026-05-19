@@ -32,7 +32,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Lock, Upload, FileText, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Edit, Trash2, Lock, Upload, FileText, X, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, CURRENCY } from "@/lib/currency";
 import ImageUpload from "./ImageUpload";
@@ -67,6 +84,66 @@ interface Package {
 interface AdminPackagesProps {
   onUpdate: () => void;
 }
+
+interface SortableRowProps {
+  pkg: Package;
+  onEdit: (pkg: Package) => void;
+  onDelete: (id: string) => void;
+  onToggleActive: (id: string, current: boolean) => void;
+  isViewerMode: boolean;
+}
+
+const SortableRow = ({ pkg, onEdit, onDelete, onToggleActive, isViewerMode }: SortableRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: pkg.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      <TableCell className="w-10">
+        <button
+          className="cursor-grab active:cursor-grabbing touch-none p-1 hover:bg-muted rounded"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="w-4 h-4 text-muted-foreground" />
+        </button>
+      </TableCell>
+      <TableCell className="font-medium">{pkg.title}</TableCell>
+      <TableCell>
+        <Badge variant="outline" className="capitalize">{pkg.type}</Badge>
+      </TableCell>
+      <TableCell className="font-bold">{formatCurrency(pkg.price)}</TableCell>
+      <TableCell>{pkg.duration_days} days</TableCell>
+      <TableCell>{pkg.stock}</TableCell>
+      <TableCell>
+        <Switch
+          checked={pkg.is_active}
+          onCheckedChange={() => onToggleActive(pkg.id, pkg.is_active)}
+          disabled={isViewerMode}
+        />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <AdminActionButton variant="ghost" size="icon" onClick={() => onEdit(pkg)}>
+            <Edit className="w-4 h-4" />
+          </AdminActionButton>
+          <AdminActionButton
+            variant="ghost"
+            size="icon"
+            className="text-destructive"
+            onClick={() => onDelete(pkg.id)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </AdminActionButton>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
 
 const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
   const { toast } = useToast();
@@ -125,37 +202,45 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
     setLoading(false);
   };
 
-  const moveOrder = async (pkg: Package, direction: "up" | "down") => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent, type: "hajj" | "umrah") => {
     if (isViewerMode) return;
-    const sameType = packages.filter((p) => p.type === pkg.type);
-    const idx = sameType.findIndex((p) => p.id === pkg.id);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sameType.length) return;
-    const other = sameType[swapIdx];
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const a = pkg.order_index ?? 0;
-    const b = other.order_index ?? 0;
-    const tmp = -Math.abs(Math.max(a, b)) - 1000;
+    const sameType = packages.filter((p) => p.type === type);
+    const oldIndex = sameType.findIndex((p) => p.id === active.id);
+    const newIndex = sameType.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    const { error: e1 } = await supabase.from("packages").update({ order_index: tmp }).eq("id", pkg.id);
-    if (e1) { toast({ title: "Error", description: e1.message, variant: "destructive" }); return; }
-    await supabase.from("packages").update({ order_index: a }).eq("id", other.id);
-    await supabase.from("packages").update({ order_index: b }).eq("id", pkg.id);
+    const reordered = arrayMove(sameType, oldIndex, newIndex);
+    const updated = reordered.map((p, idx) => ({ ...p, order_index: idx + 1 }));
 
-    setPackages((prev) => {
-      const updated = prev.map((p) => {
-        if (p.id === pkg.id) return { ...p, order_index: b };
-        if (p.id === other.id) return { ...p, order_index: a };
-        return p;
-      });
-      return [...updated].sort((x, y) => {
-        const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
-        const tr = typeRank(x.type) - typeRank(y.type);
-        if (tr !== 0) return tr;
-        return (x.order_index ?? 0) - (y.order_index ?? 0);
-      });
-    });
-    onUpdate();
+    // Optimistic local update
+    const others = packages.filter((p) => p.type !== type);
+    setPackages([...others, ...updated].sort((a, b) => {
+      const typeRank = (t: string) => (t === "hajj" ? 0 : 1);
+      const tr = typeRank(a.type) - typeRank(b.type);
+      if (tr !== 0) return tr;
+      return (a.order_index ?? 0) - (b.order_index ?? 0);
+    }));
+
+    try {
+      await Promise.all(
+        updated.map((p) =>
+          supabase.from("packages").update({ order_index: p.order_index }).eq("id", p.id)
+        )
+      );
+      toast({ title: "Order updated" });
+      onUpdate();
+    } catch (err: any) {
+      toast({ title: "Error", description: "Failed to save new order", variant: "destructive" });
+      fetchPackages();
+    }
   };
 
   const resetForm = () => {
@@ -643,87 +728,66 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
           </Dialog>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Order</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {packages.map((pkg, idx) => {
-                const sameType = packages.filter((p) => p.type === pkg.type);
-                const sameIdx = sameType.findIndex((p) => p.id === pkg.id);
-                return (
-                <TableRow key={pkg.id}>
-                  <TableCell>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <AdminActionButton
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => moveOrder(pkg, "up")}
-                        disabled={sameIdx === 0}
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </AdminActionButton>
-                      <span className="text-xs text-muted-foreground">{sameIdx + 1}</span>
-                      <AdminActionButton
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => moveOrder(pkg, "down")}
-                        disabled={sameIdx === sameType.length - 1}
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </AdminActionButton>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">{pkg.title}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {pkg.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-bold">{formatCurrency(pkg.price)}</TableCell>
-                  <TableCell>{pkg.duration_days} days</TableCell>
-                  <TableCell>{pkg.stock}</TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={pkg.is_active}
-                      onCheckedChange={() => toggleActive(pkg.id, pkg.is_active)}
-                      disabled={isViewerMode}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <AdminActionButton variant="ghost" size="icon" onClick={() => handleEdit(pkg)}>
-                        <Edit className="w-4 h-4" />
-                      </AdminActionButton>
-                      <AdminActionButton
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive"
-                        onClick={() => handleDelete(pkg.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </AdminActionButton>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+      <CardContent className="space-y-8">
+        {(["hajj", "umrah"] as const).map((groupType) => {
+          const groupPackages = packages.filter((p) => p.type === groupType);
+          return (
+            <div key={groupType}>
+              <h3 className="font-semibold text-lg mb-3 capitalize">
+                {groupType} Packages ({groupPackages.length})
+                <span className="text-xs font-normal text-muted-foreground ml-2">
+                  — drag the handle to reorder
+                </span>
+              </h3>
+              <div className="overflow-x-auto">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e) => handleDragEnd(e, groupType)}
+                >
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Stock</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <SortableContext
+                      items={groupPackages.map((p) => p.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <TableBody>
+                        {groupPackages.map((pkg) => (
+                          <SortableRow
+                            key={pkg.id}
+                            pkg={pkg}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onToggleActive={toggleActive}
+                            isViewerMode={isViewerMode}
+                          />
+                        ))}
+                        {groupPackages.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                              No {groupType} packages yet
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </SortableContext>
+                  </Table>
+                </DndContext>
+              </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
