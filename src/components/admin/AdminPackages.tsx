@@ -648,6 +648,7 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16">Order</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Price</TableHead>
@@ -658,8 +659,34 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {packages.map((pkg) => (
+              {packages.map((pkg, idx) => {
+                const sameType = packages.filter((p) => p.type === pkg.type);
+                const sameIdx = sameType.findIndex((p) => p.id === pkg.id);
+                return (
                 <TableRow key={pkg.id}>
+                  <TableCell>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <AdminActionButton
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => moveOrder(pkg, "up")}
+                        disabled={sameIdx === 0}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </AdminActionButton>
+                      <span className="text-xs text-muted-foreground">{sameIdx + 1}</span>
+                      <AdminActionButton
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => moveOrder(pkg, "down")}
+                        disabled={sameIdx === sameType.length - 1}
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </AdminActionButton>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-medium">{pkg.title}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="capitalize">
@@ -692,7 +719,8 @@ const AdminPackages = ({ onUpdate }: AdminPackagesProps) => {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
