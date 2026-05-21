@@ -29,6 +29,7 @@ import { formatCurrency } from "@/lib/currency";
 import { z } from "zod";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import BankTransferDetails from "./BankTransferDetails";
+import BkashPersonalDetails, { BkashPersonalInfo } from "./BkashPersonalDetails";
 import { Separator } from "@/components/ui/separator";
 
 interface Package {
@@ -88,6 +89,7 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
   const [bankTransactionNumber, setBankTransactionNumber] = useState("");
   const [bankScreenshot, setBankScreenshot] = useState<File | null>(null);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
+  const [bkashPersonalDetails, setBkashPersonalDetails] = useState<BkashPersonalInfo | null>(null);
   const [formData, setFormData] = useState({
     guestName: "",
     guestEmail: "",
@@ -109,6 +111,9 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
     if (formData.paymentMethod === "bank_transfer" && !bankDetails) {
       fetchBankDetails();
     }
+    if (formData.paymentMethod === "bkash_personal" && !bkashPersonalDetails) {
+      fetchBkashPersonalDetails();
+    }
   }, [formData.paymentMethod]);
 
   const fetchBankDetails = async () => {
@@ -125,6 +130,22 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       }
     } catch (error) {
       console.error("Error fetching bank details:", error);
+    }
+  };
+
+  const fetchBkashPersonalDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("payment_methods")
+        .select("credentials")
+        .eq("slug", "bkash_personal")
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.credentials) {
+        setBkashPersonalDetails(data.credentials as unknown as BkashPersonalInfo);
+      }
+    } catch (error) {
+      console.error("Error fetching bKash personal details:", error);
     }
   };
 
@@ -236,20 +257,23 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       }
     }
 
-    // Validate bank transfer specific fields
-    if (formData.paymentMethod === "bank_transfer") {
-      const bankErrors: FormErrors = {};
+    // Validate manual payment fields (bank transfer / bKash personal)
+    const isManualPayment =
+      formData.paymentMethod === "bank_transfer" ||
+      formData.paymentMethod === "bkash_personal";
+    if (isManualPayment) {
+      const manualErrors: FormErrors = {};
       if (!bankTransactionNumber.trim()) {
-        bankErrors.transactionNumber = "Transaction number is required";
+        manualErrors.transactionNumber = "Transaction ID is required";
       }
       if (!bankScreenshot) {
-        bankErrors.screenshot = "Payment screenshot is required";
+        manualErrors.screenshot = "Payment screenshot is required";
       }
-      if (Object.keys(bankErrors).length > 0) {
-        setErrors(prev => ({ ...prev, ...bankErrors }));
+      if (Object.keys(manualErrors).length > 0) {
+        setErrors(prev => ({ ...prev, ...manualErrors }));
         toast({
           title: "Validation Error",
-          description: "Please provide transaction number and screenshot.",
+          description: "Please provide transaction ID and screenshot.",
           variant: "destructive",
         });
         return;
@@ -278,8 +302,14 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       guest_email: formData.guestEmail.trim() || null,
       guest_phone: formData.guestPhone.trim(),
       payment_method: isInstallment ? "installment" : formData.paymentMethod,
-      payment_status: isInstallment ? "emi_pending" : (formData.paymentMethod === 'cash' ? 'pending_cash' : (formData.paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending')),
-      bank_transaction_number: formData.paymentMethod === "bank_transfer" ? bankTransactionNumber.trim() : null,
+      payment_status: isInstallment
+        ? "emi_pending"
+        : formData.paymentMethod === 'cash'
+          ? 'pending_cash'
+          : (formData.paymentMethod === 'bank_transfer' || formData.paymentMethod === 'bkash_personal')
+            ? 'pending_verification'
+            : 'pending',
+      bank_transaction_number: (formData.paymentMethod === "bank_transfer" || formData.paymentMethod === "bkash_personal") ? bankTransactionNumber.trim() : null,
     });
 
     if (error) {
@@ -396,10 +426,14 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       return;
     }
 
-    // Handle bank transfer - upload screenshot
-    if (formData.paymentMethod === "bank_transfer" && bankScreenshot) {
+    // Handle manual payments (bank transfer & bKash personal) - upload screenshot
+    const isManualSlug =
+      formData.paymentMethod === "bank_transfer" ||
+      formData.paymentMethod === "bkash_personal";
+    if (isManualSlug && bankScreenshot) {
       const fileExt = bankScreenshot.name.split(".").pop();
-      const fileName = `${bookingId}/bank-transfer-${Date.now()}.${fileExt}`;
+      const prefix = formData.paymentMethod === "bkash_personal" ? "bkash-personal" : "bank-transfer";
+      const fileName = `${bookingId}/${prefix}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("booking-documents")
@@ -408,7 +442,6 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       if (uploadError) {
         console.error("Screenshot upload error:", uploadError);
       } else {
-        // Get public URL and update booking
         const { data: urlData } = supabase.storage
           .from("booking-documents")
           .getPublicUrl(fileName);
@@ -747,8 +780,8 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
                     if (touched.paymentMethod) {
                       setErrors(prev => ({ ...prev, paymentMethod: undefined }));
                     }
-                    // Clear bank transfer errors when switching away
-                    if (method !== "bank_transfer") {
+                    // Clear manual payment fields when switching away
+                    if (method !== "bank_transfer" && method !== "bkash_personal") {
                       setErrors(prev => ({ ...prev, transactionNumber: undefined, screenshot: undefined }));
                       setBankTransactionNumber("");
                       setBankScreenshot(null);
@@ -782,6 +815,28 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
                     error={errors.transactionNumber || errors.screenshot}
                   />
                 )}
+
+                {/* bKash Personal Details for Installment */}
+                {formData.paymentMethod === "bkash_personal" && bkashPersonalDetails && (
+                  <BkashPersonalDetails
+                    details={bkashPersonalDetails}
+                    transactionNumber={bankTransactionNumber}
+                    onTransactionNumberChange={(value) => {
+                      setBankTransactionNumber(value);
+                      if (errors.transactionNumber) {
+                        setErrors(prev => ({ ...prev, transactionNumber: undefined }));
+                      }
+                    }}
+                    screenshotFile={bankScreenshot}
+                    onScreenshotChange={(file) => {
+                      setBankScreenshot(file);
+                      if (errors.screenshot) {
+                        setErrors(prev => ({ ...prev, screenshot: undefined }));
+                      }
+                    }}
+                    error={errors.transactionNumber || errors.screenshot}
+                  />
+                )}
               </motion.div>
             )}
 
@@ -795,8 +850,8 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
                     if (touched.paymentMethod) {
                       setErrors(prev => ({ ...prev, paymentMethod: undefined }));
                     }
-                    // Clear bank transfer errors when switching away
-                    if (method !== "bank_transfer") {
+                    // Clear manual payment fields when switching away
+                    if (method !== "bank_transfer" && method !== "bkash_personal") {
                       setErrors(prev => ({ ...prev, transactionNumber: undefined, screenshot: undefined }));
                       setBankTransactionNumber("");
                       setBankScreenshot(null);
@@ -813,6 +868,28 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
                 {formData.paymentMethod === "bank_transfer" && bankDetails && (
                   <BankTransferDetails
                     bankDetails={bankDetails}
+                    transactionNumber={bankTransactionNumber}
+                    onTransactionNumberChange={(value) => {
+                      setBankTransactionNumber(value);
+                      if (errors.transactionNumber) {
+                        setErrors(prev => ({ ...prev, transactionNumber: undefined }));
+                      }
+                    }}
+                    screenshotFile={bankScreenshot}
+                    onScreenshotChange={(file) => {
+                      setBankScreenshot(file);
+                      if (errors.screenshot) {
+                        setErrors(prev => ({ ...prev, screenshot: undefined }));
+                      }
+                    }}
+                    error={errors.transactionNumber || errors.screenshot}
+                  />
+                )}
+
+                {/* bKash Personal Details */}
+                {formData.paymentMethod === "bkash_personal" && bkashPersonalDetails && (
+                  <BkashPersonalDetails
+                    details={bkashPersonalDetails}
                     transactionNumber={bankTransactionNumber}
                     onTransactionNumberChange={(value) => {
                       setBankTransactionNumber(value);

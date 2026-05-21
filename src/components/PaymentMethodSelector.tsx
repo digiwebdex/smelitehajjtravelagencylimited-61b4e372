@@ -67,6 +67,8 @@ const PaymentMethodSelector = ({ selectedMethod, onSelect }: PaymentMethodSelect
         return <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/30">Secure</Badge>;
       case "bkash":
         return <Badge variant="outline" className="text-xs bg-pink-500/10 text-pink-600 border-pink-500/30">Mobile</Badge>;
+      case "bkash_personal":
+        return <Badge variant="outline" className="text-xs bg-pink-500/10 text-pink-600 border-pink-500/30">Send Money</Badge>;
       case "nagad":
         return <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-600 border-orange-500/30">Mobile</Badge>;
       case "cash":

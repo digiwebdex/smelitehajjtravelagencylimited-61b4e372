@@ -118,6 +118,15 @@ const paymentMethodConfigs: Record<string, {
       { key: 'swift_code', label: 'SWIFT Code', type: 'text', placeholder: 'e.g., BABORHDHXXX' },
     ],
   },
+  bkash_personal: {
+    hasTestMode: false,
+    fields: [
+      { key: 'mobile_number', label: 'bKash Number', type: 'text', placeholder: 'e.g., 01712345678', required: true },
+      { key: 'account_name', label: 'Account Holder Name', type: 'text', placeholder: 'e.g., SM Elite Hajj' },
+      { key: 'account_type', label: 'Account Type', type: 'text', placeholder: 'Personal / Agent / Merchant' },
+      { key: 'instructions', label: 'Payment Instructions', type: 'text', placeholder: 'Use "Send Money" option and keep TrxID' },
+    ],
+  },
 };
 
 const iconMap: Record<string, React.ElementType> = {
