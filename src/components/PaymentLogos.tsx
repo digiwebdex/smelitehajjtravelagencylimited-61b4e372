@@ -108,6 +108,7 @@ export const BankTransferLogo: React.FC<LogoProps> = ({ className = "", size = 4
 export const paymentLogoMap: Record<string, React.FC<LogoProps>> = {
   sslcommerz: SSLCommerzLogo,
   bkash: BkashLogo,
+  bkash_personal: BkashLogo,
   nagad: NagadLogo,
   cash: CashLogo,
   bank_transfer: BankTransferLogo,
