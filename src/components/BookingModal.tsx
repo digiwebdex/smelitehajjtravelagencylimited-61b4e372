@@ -850,8 +850,8 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
                     if (touched.paymentMethod) {
                       setErrors(prev => ({ ...prev, paymentMethod: undefined }));
                     }
-                    // Clear bank transfer errors when switching away
-                    if (method !== "bank_transfer") {
+                    // Clear manual payment fields when switching away
+                    if (method !== "bank_transfer" && method !== "bkash_personal") {
                       setErrors(prev => ({ ...prev, transactionNumber: undefined, screenshot: undefined }));
                       setBankTransactionNumber("");
                       setBankScreenshot(null);
@@ -868,6 +868,28 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
                 {formData.paymentMethod === "bank_transfer" && bankDetails && (
                   <BankTransferDetails
                     bankDetails={bankDetails}
+                    transactionNumber={bankTransactionNumber}
+                    onTransactionNumberChange={(value) => {
+                      setBankTransactionNumber(value);
+                      if (errors.transactionNumber) {
+                        setErrors(prev => ({ ...prev, transactionNumber: undefined }));
+                      }
+                    }}
+                    screenshotFile={bankScreenshot}
+                    onScreenshotChange={(file) => {
+                      setBankScreenshot(file);
+                      if (errors.screenshot) {
+                        setErrors(prev => ({ ...prev, screenshot: undefined }));
+                      }
+                    }}
+                    error={errors.transactionNumber || errors.screenshot}
+                  />
+                )}
+
+                {/* bKash Personal Details */}
+                {formData.paymentMethod === "bkash_personal" && bkashPersonalDetails && (
+                  <BkashPersonalDetails
+                    details={bkashPersonalDetails}
                     transactionNumber={bankTransactionNumber}
                     onTransactionNumberChange={(value) => {
                       setBankTransactionNumber(value);
