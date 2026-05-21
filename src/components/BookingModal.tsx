@@ -302,8 +302,14 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       guest_email: formData.guestEmail.trim() || null,
       guest_phone: formData.guestPhone.trim(),
       payment_method: isInstallment ? "installment" : formData.paymentMethod,
-      payment_status: isInstallment ? "emi_pending" : (formData.paymentMethod === 'cash' ? 'pending_cash' : (formData.paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending')),
-      bank_transaction_number: formData.paymentMethod === "bank_transfer" ? bankTransactionNumber.trim() : null,
+      payment_status: isInstallment
+        ? "emi_pending"
+        : formData.paymentMethod === 'cash'
+          ? 'pending_cash'
+          : (formData.paymentMethod === 'bank_transfer' || formData.paymentMethod === 'bkash_personal')
+            ? 'pending_verification'
+            : 'pending',
+      bank_transaction_number: (formData.paymentMethod === "bank_transfer" || formData.paymentMethod === "bkash_personal") ? bankTransactionNumber.trim() : null,
     });
 
     if (error) {
