@@ -2619,60 +2619,90 @@ export type Database = {
           browser: string | null
           city: string | null
           country: string | null
+          country_code: string | null
           created_at: string
           device_type: string | null
+          duration_seconds: number | null
           id: string
+          ip_address: string | null
+          is_new_visitor: boolean | null
           language: string | null
           os: string | null
           page_path: string
           page_title: string | null
           referrer: string | null
           referrer_source: string | null
+          region: string | null
+          screen_resolution: string | null
           session_id: string | null
+          timezone: string | null
           user_agent: string | null
           utm_campaign: string | null
+          utm_content: string | null
           utm_medium: string | null
           utm_source: string | null
+          utm_term: string | null
+          viewport_size: string | null
           visitor_id: string | null
         }
         Insert: {
           browser?: string | null
           city?: string | null
           country?: string | null
+          country_code?: string | null
           created_at?: string
           device_type?: string | null
+          duration_seconds?: number | null
           id?: string
+          ip_address?: string | null
+          is_new_visitor?: boolean | null
           language?: string | null
           os?: string | null
           page_path: string
           page_title?: string | null
           referrer?: string | null
           referrer_source?: string | null
+          region?: string | null
+          screen_resolution?: string | null
           session_id?: string | null
+          timezone?: string | null
           user_agent?: string | null
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
+          utm_term?: string | null
+          viewport_size?: string | null
           visitor_id?: string | null
         }
         Update: {
           browser?: string | null
           city?: string | null
           country?: string | null
+          country_code?: string | null
           created_at?: string
           device_type?: string | null
+          duration_seconds?: number | null
           id?: string
+          ip_address?: string | null
+          is_new_visitor?: boolean | null
           language?: string | null
           os?: string | null
           page_path?: string
           page_title?: string | null
           referrer?: string | null
           referrer_source?: string | null
+          region?: string | null
+          screen_resolution?: string | null
           session_id?: string | null
+          timezone?: string | null
           user_agent?: string | null
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
+          utm_term?: string | null
+          viewport_size?: string | null
           visitor_id?: string | null
         }
         Relationships: []
