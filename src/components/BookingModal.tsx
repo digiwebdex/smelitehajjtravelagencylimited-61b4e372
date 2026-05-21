@@ -426,10 +426,14 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       return;
     }
 
-    // Handle bank transfer - upload screenshot
-    if (formData.paymentMethod === "bank_transfer" && bankScreenshot) {
+    // Handle manual payments (bank transfer & bKash personal) - upload screenshot
+    const isManualSlug =
+      formData.paymentMethod === "bank_transfer" ||
+      formData.paymentMethod === "bkash_personal";
+    if (isManualSlug && bankScreenshot) {
       const fileExt = bankScreenshot.name.split(".").pop();
-      const fileName = `${bookingId}/bank-transfer-${Date.now()}.${fileExt}`;
+      const prefix = formData.paymentMethod === "bkash_personal" ? "bkash-personal" : "bank-transfer";
+      const fileName = `${bookingId}/${prefix}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("booking-documents")
@@ -438,7 +442,6 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       if (uploadError) {
         console.error("Screenshot upload error:", uploadError);
       } else {
-        // Get public URL and update booking
         const { data: urlData } = supabase.storage
           .from("booking-documents")
           .getPublicUrl(fileName);
