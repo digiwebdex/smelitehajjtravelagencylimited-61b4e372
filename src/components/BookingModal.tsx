@@ -111,6 +111,9 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
     if (formData.paymentMethod === "bank_transfer" && !bankDetails) {
       fetchBankDetails();
     }
+    if (formData.paymentMethod === "bkash_personal" && !bkashPersonalDetails) {
+      fetchBkashPersonalDetails();
+    }
   }, [formData.paymentMethod]);
 
   const fetchBankDetails = async () => {
@@ -127,6 +130,22 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       }
     } catch (error) {
       console.error("Error fetching bank details:", error);
+    }
+  };
+
+  const fetchBkashPersonalDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("payment_methods")
+        .select("credentials")
+        .eq("slug", "bkash_personal")
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.credentials) {
+        setBkashPersonalDetails(data.credentials as unknown as BkashPersonalInfo);
+      }
+    } catch (error) {
+      console.error("Error fetching bKash personal details:", error);
     }
   };
 
