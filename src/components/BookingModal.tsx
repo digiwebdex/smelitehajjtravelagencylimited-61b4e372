@@ -89,6 +89,7 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
   const [bankTransactionNumber, setBankTransactionNumber] = useState("");
   const [bankScreenshot, setBankScreenshot] = useState<File | null>(null);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
+  const [bkashPersonalDetails, setBkashPersonalDetails] = useState<BkashPersonalInfo | null>(null);
   const [formData, setFormData] = useState({
     guestName: "",
     guestEmail: "",
