@@ -29,6 +29,7 @@ import { formatCurrency } from "@/lib/currency";
 import { z } from "zod";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import BankTransferDetails from "./BankTransferDetails";
+import BkashPersonalDetails, { BkashPersonalInfo } from "./BkashPersonalDetails";
 import { Separator } from "@/components/ui/separator";
 
 interface Package {
