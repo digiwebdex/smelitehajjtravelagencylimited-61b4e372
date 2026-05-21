@@ -257,20 +257,23 @@ const BookingModal = ({ isOpen, onClose, package_info }: BookingModalProps) => {
       }
     }
 
-    // Validate bank transfer specific fields
-    if (formData.paymentMethod === "bank_transfer") {
-      const bankErrors: FormErrors = {};
+    // Validate manual payment fields (bank transfer / bKash personal)
+    const isManualPayment =
+      formData.paymentMethod === "bank_transfer" ||
+      formData.paymentMethod === "bkash_personal";
+    if (isManualPayment) {
+      const manualErrors: FormErrors = {};
       if (!bankTransactionNumber.trim()) {
-        bankErrors.transactionNumber = "Transaction number is required";
+        manualErrors.transactionNumber = "Transaction ID is required";
       }
       if (!bankScreenshot) {
-        bankErrors.screenshot = "Payment screenshot is required";
+        manualErrors.screenshot = "Payment screenshot is required";
       }
-      if (Object.keys(bankErrors).length > 0) {
-        setErrors(prev => ({ ...prev, ...bankErrors }));
+      if (Object.keys(manualErrors).length > 0) {
+        setErrors(prev => ({ ...prev, ...manualErrors }));
         toast({
           title: "Validation Error",
-          description: "Please provide transaction number and screenshot.",
+          description: "Please provide transaction ID and screenshot.",
           variant: "destructive",
         });
         return;
