@@ -1,12 +1,15 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Plane, Building2 } from "lucide-react";
 import MakkahIcon from "./icons/MakkahIcon";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ServiceTile {
   id: string;
   title: string;
   subtitle: string;
-  icon: "hajj" | "umrah" | "visa";
+  icon: string;
+  image_url?: string | null;
   href: string;
   color: string;
   bgColor: string;
@@ -47,7 +50,34 @@ interface HeroServiceTilesProps {
   theme?: "light" | "dark";
 }
 
-const HeroServiceTiles = ({ tiles = defaultTiles, theme = "light" }: HeroServiceTilesProps) => {
+const HeroServiceTiles = ({ tiles: tilesProp, theme = "light" }: HeroServiceTilesProps) => {
+  const [tiles, setTiles] = useState<ServiceTile[]>(tilesProp ?? defaultTiles);
+
+  useEffect(() => {
+    if (tilesProp) return;
+    (async () => {
+      const { data, error } = await (supabase as any)
+        .from("hero_service_tiles")
+        .select("*")
+        .eq("is_active", true)
+        .order("order_index");
+      if (!error && data && data.length > 0) {
+        setTiles(
+          data.map((row: any) => ({
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle || "",
+            icon: row.icon,
+            image_url: row.image_url,
+            href: row.href,
+            color: row.color_class || "text-emerald-600",
+            bgColor: row.bg_class || "bg-emerald-50 hover:bg-emerald-100 border-emerald-200",
+          }))
+        );
+      }
+    })();
+  }, [tilesProp]);
+
   const scrollToSection = (href: string) => {
     const sectionId = href.replace("#", "");
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
