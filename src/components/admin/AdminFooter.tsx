@@ -221,6 +221,7 @@ const AdminFooter = () => {
       address_label_2: footerContent.address_label_2,
       contact_phones: phonesArray,
       contact_email: footerContent.contact_email,
+      contact_email_2: footerContent.contact_email_2,
       video_url: footerContent.video_url,
       video_opacity: footerContent.video_opacity,
       video_enabled: footerContent.video_enabled,
