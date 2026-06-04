@@ -257,6 +257,7 @@ const AdminDashboard = () => {
       case "seo": return <AdminSEO />;
       case "menu": return <AdminMenu />;
       case "hero": return <AdminHero />;
+      case "hero-tiles": return <AdminHeroServiceTiles />;
       case "services": return <AdminServices />;
       case "team": return <AdminTeam />;
       case "visa": return <AdminVisa />;
