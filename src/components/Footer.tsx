@@ -215,6 +215,7 @@ const Footer = () => {
         address_label_2: dataRecord.address_label_2 as string || "Branch Office",
         contact_phones: Array.isArray(dataRecord.contact_phones) ? dataRecord.contact_phones as string[] : [],
         contact_email: dataRecord.contact_email as string || "",
+        contact_email_2: dataRecord.contact_email_2 as string || "",
         video_url: dataRecord.video_url as string || "/videos/footer-bg.mp4",
         video_opacity: (dataRecord.video_opacity as number) ?? 60,
         video_enabled: (dataRecord.video_enabled as boolean) ?? true,
