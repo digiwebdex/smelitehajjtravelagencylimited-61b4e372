@@ -738,13 +738,23 @@ const AdminFooter = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Email Address</label>
+              <label className="text-sm font-medium">Primary Email Address</label>
               <Input
                 type="email"
                 value={footerContent.contact_email}
                 onChange={(e) => setFooterContent({ ...footerContent, contact_email: e.target.value })}
                 placeholder="info@smelitehajj.com"
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Secondary Email Address (optional)</label>
+              <Input
+                type="email"
+                value={footerContent.contact_email_2}
+                onChange={(e) => setFooterContent({ ...footerContent, contact_email_2: e.target.value })}
+                placeholder="support@smelitehajj.com"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Leave blank to hide. Shown below the primary email in the footer.</p>
             </div>
           </div>
         </div>
