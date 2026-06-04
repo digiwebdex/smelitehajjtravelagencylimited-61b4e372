@@ -146,7 +146,11 @@ const HeroServiceTiles = ({ tiles: tilesProp, theme = "light" }: HeroServiceTile
               : "bg-white/10"
             }
           `}>
-            {renderIcon(tile.icon, theme === "light" ? tile.color : "text-secondary")}
+            {tile.image_url ? (
+              <img src={tile.image_url} alt={tile.title} className="w-6 h-6 object-contain" loading="lazy" />
+            ) : (
+              renderIcon(tile.icon, theme === "light" ? tile.color : "text-secondary")
+            )}
           </div>
 
           {/* Text Content */}
