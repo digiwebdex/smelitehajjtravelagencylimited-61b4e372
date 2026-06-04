@@ -107,6 +107,7 @@ interface FooterContent {
   address_label_2: string;
   contact_phones: string[]; // Now stores sections, each section is "phone1, phone2"
   contact_email: string;
+  contact_email_2: string;
   video_url: string;
   video_opacity: number;
   video_enabled: boolean;
