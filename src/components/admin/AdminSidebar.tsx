@@ -142,6 +142,7 @@ const menuGroups = [
       { value: "seo", label: "SEO Settings", icon: Eye },
       { value: "menu", label: "Menu", icon: Menu },
       { value: "hero", label: "Hero", icon: Image },
+      { value: "hero-tiles", label: "Hero Service Tiles", icon: Image },
       { value: "services", label: "Services", icon: Settings },
       { value: "team", label: "Team", icon: Users },
       { value: "visa", label: "Visa Countries", icon: Globe },
