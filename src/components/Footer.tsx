@@ -460,12 +460,14 @@ const Footer = () => {
                   >
                     {displayEmail}
                   </a>
-                  <a 
-                    href="mailto:info@smelitehajj.com"
-                    className="text-primary-foreground/80 text-sm hover:text-secondary transition-colors"
-                  >
-                    info@smelitehajj.com
-                  </a>
+                  {displayEmail2 && (
+                    <a 
+                      href={`mailto:${displayEmail2}`}
+                      className="text-primary-foreground/80 text-sm hover:text-secondary transition-colors"
+                    >
+                      {displayEmail2}
+                    </a>
+                  )}
                 </div>
               </li>
             </ul>
