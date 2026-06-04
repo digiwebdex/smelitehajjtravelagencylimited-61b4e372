@@ -157,6 +157,7 @@ const Footer = () => {
     address_label_2: "Branch Office",
     contact_phones: [],
     contact_email: "",
+    contact_email_2: "",
     video_url: "/videos/footer-bg.mp4",
     video_opacity: 60,
     video_enabled: true,
