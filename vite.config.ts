@@ -48,13 +48,15 @@ export default defineConfig(({ mode }) => {
       }),
     ].filter(Boolean),
     resolve: {
-      alias: {
-        "@": path.resolve(__dirname, "./src"),
-        // When VITE_API_URL is set (VPS build), swap Supabase client with VPS client
-        ...(useVPS ? {
-          "@/integrations/supabase/client": path.resolve(__dirname, "./src/lib/vpsClient.ts"),
-        } : {}),
-      },
+      alias: [
+        // IMPORTANT: specific aliases MUST come before the generic "@" alias,
+        // otherwise "@" matches first and the swap never happens.
+        ...(useVPS ? [{
+          find: /^@\/integrations\/supabase\/client(\.ts)?$/,
+          replacement: path.resolve(__dirname, "./src/lib/vpsClient.ts"),
+        }] : []),
+        { find: "@", replacement: path.resolve(__dirname, "./src") },
+      ],
       dedupe: ["react", "react-dom", "@tanstack/react-query"],
     },
     optimizeDeps: {
