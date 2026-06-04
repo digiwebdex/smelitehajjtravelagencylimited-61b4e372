@@ -114,6 +114,7 @@ interface FooterContent {
   address_label_2?: string;
   contact_phones?: string[];
   contact_email?: string;
+  contact_email_2?: string;
   video_url?: string;
   video_opacity?: number;
   video_enabled?: boolean;
@@ -156,6 +157,7 @@ const Footer = () => {
     address_label_2: "Branch Office",
     contact_phones: [],
     contact_email: "",
+    contact_email_2: "",
     video_url: "/videos/footer-bg.mp4",
     video_opacity: 60,
     video_enabled: true,
@@ -213,6 +215,7 @@ const Footer = () => {
         address_label_2: dataRecord.address_label_2 as string || "Branch Office",
         contact_phones: Array.isArray(dataRecord.contact_phones) ? dataRecord.contact_phones as string[] : [],
         contact_email: dataRecord.contact_email as string || "",
+        contact_email_2: dataRecord.contact_email_2 as string || "",
         video_url: dataRecord.video_url as string || "/videos/footer-bg.mp4",
         video_opacity: (dataRecord.video_opacity as number) ?? 60,
         video_enabled: (dataRecord.video_enabled as boolean) ?? true,
@@ -234,6 +237,7 @@ const Footer = () => {
   const displayAddressLabel2 = content.address_label_2 || "Branch Office";
   const displayPhones = content.contact_phones?.length ? content.contact_phones : [contactDetails.phone];
   const displayEmail = content.contact_email || contactDetails.email;
+  const displayEmail2 = content.contact_email_2 || "";
   const videoUrl = content.video_url || "/videos/footer-bg.mp4";
   const videoOpacity = content.video_opacity ?? 60;
   const videoEnabled = content.video_enabled ?? true;
@@ -456,12 +460,14 @@ const Footer = () => {
                   >
                     {displayEmail}
                   </a>
-                  <a 
-                    href="mailto:info@smelitehajj.com"
-                    className="text-primary-foreground/80 text-sm hover:text-secondary transition-colors"
-                  >
-                    info@smelitehajj.com
-                  </a>
+                  {displayEmail2 && (
+                    <a 
+                      href={`mailto:${displayEmail2}`}
+                      className="text-primary-foreground/80 text-sm hover:text-secondary transition-colors"
+                    >
+                      {displayEmail2}
+                    </a>
+                  )}
                 </div>
               </li>
             </ul>

@@ -107,6 +107,7 @@ interface FooterContent {
   address_label_2: string;
   contact_phones: string[]; // Now stores sections, each section is "phone1, phone2"
   contact_email: string;
+  contact_email_2: string;
   video_url: string;
   video_opacity: number;
   video_enabled: boolean;
@@ -140,6 +141,7 @@ const AdminFooter = () => {
     address_label_2: "Branch Office",
     contact_phones: [], // Stores sections as strings
     contact_email: "",
+    contact_email_2: "",
     video_url: "",
     video_opacity: 60,
     video_enabled: true,
@@ -187,6 +189,7 @@ const AdminFooter = () => {
         address_label_2: dataRecord.address_label_2 as string || "Branch Office",
         contact_phones: Array.isArray(dataRecord.contact_phones) ? dataRecord.contact_phones as string[] : [""],
         contact_email: dataRecord.contact_email as string || "",
+        contact_email_2: dataRecord.contact_email_2 as string || "",
         video_url: dataRecord.video_url as string || "",
         video_opacity: (dataRecord.video_opacity as number) ?? 60,
         video_enabled: (dataRecord.video_enabled as boolean) ?? true,
@@ -218,6 +221,7 @@ const AdminFooter = () => {
       address_label_2: footerContent.address_label_2,
       contact_phones: phonesArray,
       contact_email: footerContent.contact_email,
+      contact_email_2: footerContent.contact_email_2,
       video_url: footerContent.video_url,
       video_opacity: footerContent.video_opacity,
       video_enabled: footerContent.video_enabled,
@@ -734,13 +738,23 @@ const AdminFooter = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Email Address</label>
+              <label className="text-sm font-medium">Primary Email Address</label>
               <Input
                 type="email"
                 value={footerContent.contact_email}
                 onChange={(e) => setFooterContent({ ...footerContent, contact_email: e.target.value })}
                 placeholder="info@smelitehajj.com"
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Secondary Email Address (optional)</label>
+              <Input
+                type="email"
+                value={footerContent.contact_email_2}
+                onChange={(e) => setFooterContent({ ...footerContent, contact_email_2: e.target.value })}
+                placeholder="support@smelitehajj.com"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Leave blank to hide. Shown below the primary email in the footer.</p>
             </div>
           </div>
         </div>

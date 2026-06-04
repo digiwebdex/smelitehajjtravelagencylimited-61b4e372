@@ -1376,6 +1376,7 @@ export type Database = {
           contact_address: string | null
           contact_address_2: string | null
           contact_email: string | null
+          contact_email_2: string | null
           contact_phones: string[] | null
           copyright_text: string | null
           created_at: string
@@ -1400,6 +1401,7 @@ export type Database = {
           contact_address?: string | null
           contact_address_2?: string | null
           contact_email?: string | null
+          contact_email_2?: string | null
           contact_phones?: string[] | null
           copyright_text?: string | null
           created_at?: string
@@ -1424,6 +1426,7 @@ export type Database = {
           contact_address?: string | null
           contact_address_2?: string | null
           contact_email?: string | null
+          contact_email_2?: string | null
           contact_phones?: string[] | null
           copyright_text?: string | null
           created_at?: string
@@ -1783,6 +1786,51 @@ export type Database = {
           title?: string
           updated_at?: string
           video_url?: string | null
+        }
+        Relationships: []
+      }
+      hero_service_tiles: {
+        Row: {
+          bg_class: string | null
+          color_class: string | null
+          created_at: string
+          href: string
+          icon: string
+          id: string
+          image_url: string | null
+          is_active: boolean
+          order_index: number
+          subtitle: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bg_class?: string | null
+          color_class?: string | null
+          created_at?: string
+          href?: string
+          icon?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          order_index?: number
+          subtitle?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bg_class?: string | null
+          color_class?: string | null
+          created_at?: string
+          href?: string
+          icon?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          order_index?: number
+          subtitle?: string | null
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
