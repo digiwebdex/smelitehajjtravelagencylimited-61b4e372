@@ -141,6 +141,7 @@ const AdminFooter = () => {
     address_label_2: "Branch Office",
     contact_phones: [], // Stores sections as strings
     contact_email: "",
+    contact_email_2: "",
     video_url: "",
     video_opacity: 60,
     video_enabled: true,
