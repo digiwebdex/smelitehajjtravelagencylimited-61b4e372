@@ -237,6 +237,7 @@ const Footer = () => {
   const displayAddressLabel2 = content.address_label_2 || "Branch Office";
   const displayPhones = content.contact_phones?.length ? content.contact_phones : [contactDetails.phone];
   const displayEmail = content.contact_email || contactDetails.email;
+  const displayEmail2 = content.contact_email_2 || "";
   const videoUrl = content.video_url || "/videos/footer-bg.mp4";
   const videoOpacity = content.video_opacity ?? 60;
   const videoEnabled = content.video_enabled ?? true;
