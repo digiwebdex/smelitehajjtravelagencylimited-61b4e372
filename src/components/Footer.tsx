@@ -114,6 +114,7 @@ interface FooterContent {
   address_label_2?: string;
   contact_phones?: string[];
   contact_email?: string;
+  contact_email_2?: string;
   video_url?: string;
   video_opacity?: number;
   video_enabled?: boolean;
