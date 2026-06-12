@@ -151,7 +151,7 @@ const TeamSection = () => {
                     <div className="absolute -inset-0.5 bg-gradient-to-br from-secondary via-secondary/40 to-secondary rounded-3xl opacity-70 group-hover:opacity-100 blur-sm group-hover:blur transition-all duration-500" />
                     
                     {/* Card */}
-                    <div className="relative bg-gradient-to-br from-card via-card to-primary/5 rounded-3xl overflow-hidden shadow-elegant group-hover:shadow-2xl transition-all duration-500 flex flex-col sm:flex-row border border-secondary/20">
+                    <div className="relative bg-gradient-to-br from-card via-card to-primary/5 rounded-3xl overflow-hidden shadow-elegant group-hover:shadow-2xl transition-all duration-500 flex flex-col sm:flex-row border border-secondary/20 h-full sm:h-[380px] lg:h-[420px]">
                       
                       {/* Decorative corner ornaments */}
                       <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-secondary/60 rounded-tl-lg pointer-events-none" />
@@ -161,7 +161,7 @@ const TeamSection = () => {
 
                       {/* Large Image Container */}
                       <div 
-                        className="relative w-full sm:w-60 md:w-64 lg:w-72 h-72 sm:h-auto flex-shrink-0 overflow-hidden bg-gradient-to-br from-secondary/20 to-primary/10 cursor-pointer"
+                        className="relative w-full sm:w-60 md:w-64 lg:w-72 h-72 sm:h-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-secondary/20 to-primary/10 cursor-pointer"
                         onClick={() => member.avatar_url && setLightboxImage({ url: member.avatar_url, name: member.name })}
                       >
                         {/* Inner gold border */}
