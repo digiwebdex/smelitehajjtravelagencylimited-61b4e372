@@ -131,7 +131,7 @@ const HeroServiceTiles = ({ tiles: tilesProp, theme = "light" }: HeroServiceTile
           className={`
             relative flex items-center gap-3 px-4 py-3 rounded-xl border 
             transition-all duration-300 shadow-md hover:shadow-lg
-            w-full sm:w-auto justify-center sm:justify-start
+            w-full sm:w-auto justify-center sm:justify-center
             ${theme === "light" 
               ? tile.bgColor 
               : "bg-white/10 hover:bg-white/15 border-white/20 backdrop-blur-md"
@@ -154,7 +154,7 @@ const HeroServiceTiles = ({ tiles: tilesProp, theme = "light" }: HeroServiceTile
           </div>
 
           {/* Text Content */}
-          <div className="text-center sm:text-left">
+          <div className="text-center sm:text-center">
             <h3 className={`
               font-normal text-sm md:text-base
               ${theme === "light" ? "text-foreground" : "text-white"}

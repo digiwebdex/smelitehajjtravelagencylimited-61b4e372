@@ -68,7 +68,7 @@ const defaultSettings: SiteSettings = {
     show_book_now_button: true,
     show_mobile_cta_bar: true,
   },
-  loading: true,
+  loading: false,
 };
 
 const SiteSettingsContext = createContext<SiteSettings>(defaultSettings);

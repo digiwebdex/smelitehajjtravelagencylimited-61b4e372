@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# VPS deployment artifacts (do not commit)
+dist-vps-clean/
+dist-vps-debug/
+dist-vps-test/
+dist.old-vps-deploy/
+migration/backend/.env
+migration/backend/uploads/
+migration/backend/package-lock.json
+migration/backend/*.bak-*
+vite.config.ts.bak-*
+.env.lovable-original

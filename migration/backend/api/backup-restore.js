@@ -3,6 +3,7 @@ const router = express.Router();
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const { requireAdmin } = require('../middleware/access');
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -11,6 +12,8 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
 });
+
+router.use(requireAdmin);
 
 // POST /api/backup-restore/backup
 router.post('/backup', async (req, res) => {
@@ -48,16 +51,16 @@ router.post('/backup', async (req, res) => {
 
     const fileSize = fs.statSync(filepath).size;
 
-    // Log backup
     await pool.query(
       `INSERT INTO backup_history (backup_name, backup_type, file_path, file_size, tables_included, record_counts, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'completed')`,
       [filename, backupType, filepath, fileSize, allTables, JSON.stringify(recordCounts)]
     );
 
-    res.json({ success: true, filename, fileSize, recordCounts });
+    res.json({ success: true, filename, fileSize, recordCounts, message: 'Backup created' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Backup error:', error);
+    res.status(500).json({ error: 'Backup failed' });
   }
 });
 
@@ -73,18 +76,17 @@ router.post('/restore', async (req, res) => {
 
     for (const [table, rows] of Object.entries(backupData)) {
       if (rows.length === 0) continue;
-      
-      // Delete existing data and insert backup data
+
       await pool.query(`DELETE FROM public."${table}"`);
-      
+
       for (const row of rows) {
         const columns = Object.keys(row);
         const values = Object.values(row);
         const placeholders = values.map((_, i) => `$${i + 1}`);
-        
+
         try {
           await pool.query(
-            `INSERT INTO public."${table}" (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders.join(',')})`,
+            `INSERT INTO public."${table}" (${columns.map((c) => `"${c}"`).join(',')}) VALUES (${placeholders.join(',')})`,
             values
           );
         } catch (err) {
@@ -95,7 +97,8 @@ router.post('/restore', async (req, res) => {
 
     res.json({ success: true, message: 'Restore completed' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Restore error:', error);
+    res.status(500).json({ error: 'Restore failed' });
   }
 });
 

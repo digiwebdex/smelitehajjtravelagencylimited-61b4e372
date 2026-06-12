@@ -46,6 +46,26 @@ interface VisaCountry {
 
 const ANNOUNCEMENT_DISMISSED_KEY = "smEliteHajj_announcementDismissed";
 
+const DEFAULT_MENU_ITEMS: MenuItem[] = [
+  { id: "1", label: "Services", href: "#services", order_index: 0 },
+  { id: "2", label: "Hajj Packages", href: "#hajj", order_index: 1 },
+  { id: "3", label: "Umrah Packages", href: "#umrah", order_index: 2 },
+  { id: "4", label: "Visa Services", href: "#visa", order_index: 3 },
+  { id: "5", label: "Our Team", href: "#team", order_index: 4 },
+  { id: "6", label: "Testimonials", href: "#testimonials", order_index: 5 },
+  { id: "7", label: "FAQ", href: "#faq", order_index: 6 },
+  { id: "8", label: "Contact", href: "#contact", order_index: 7 },
+];
+
+const idle = (cb: () => void) => {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => void })
+      .requestIdleCallback(cb, { timeout: 4000 });
+  } else {
+    setTimeout(cb, 2000);
+  }
+};
+
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -58,7 +78,7 @@ const Header = () => {
   const { user, canAccessAdmin, signOut } = useAuth();
   const { companyInfo, contactDetails, appearance } = useSiteSettings();
   const navigate = useNavigate();
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU_ITEMS);
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [visaCountries, setVisaCountries] = useState<VisaCountry[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<PackageItem | null>(null);
@@ -82,9 +102,12 @@ const Header = () => {
   }, []);
 
   useEffect(() => {
-    fetchMenuItems();
-    fetchPackages();
-    fetchVisaCountries();
+    // Defer non-critical header data until after first paint
+    idle(() => {
+      fetchMenuItems();
+      fetchPackages();
+      fetchVisaCountries();
+    });
   }, []);
 
   const fetchMenuItems = async () => {
@@ -96,17 +119,6 @@ const Header = () => {
     
     if (data && data.length > 0) {
       setMenuItems(data);
-    } else {
-      setMenuItems([
-        { id: "1", label: "Services", href: "#services", order_index: 0 },
-        { id: "2", label: "Hajj Packages", href: "#hajj", order_index: 1 },
-        { id: "3", label: "Umrah Packages", href: "#umrah", order_index: 2 },
-        { id: "4", label: "Visa Services", href: "#visa", order_index: 3 },
-        { id: "5", label: "Our Team", href: "#team", order_index: 4 },
-        { id: "6", label: "Testimonials", href: "#testimonials", order_index: 5 },
-        { id: "7", label: "FAQ", href: "#faq", order_index: 6 },
-        { id: "8", label: "Contact", href: "#contact", order_index: 7 },
-      ]);
     }
   };
 

@@ -144,6 +144,7 @@ export default defineConfig(({ mode }) => {
               !dep.includes("ui-extra-vendor") &&
               !dep.includes("date-vendor") &&
               !dep.includes("icons-vendor") &&
+              !dep.includes("radix-vendor") &&
               !dep.includes("AdminDashboard")
           );
         },

@@ -68,23 +68,15 @@ const AdminBankTransferVerification = ({
 
   const sendNotification = async (notificationType: "payment_verified" | "payment_rejected", rejectionReason?: string) => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-booking-notification`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            notificationType,
-            rejectionReason,
-          }),
-        }
-      );
+      const { data: result, error } = await supabase.functions.invoke("send-booking-notification", {
+        body: {
+          bookingId: booking.id,
+          notificationType,
+          rejectionReason,
+        },
+      });
 
-      const result = await response.json();
+      if (error) throw error;
       console.log("Notification result:", result);
       
       if (result.results?.email?.sent || result.results?.sms?.sent) {

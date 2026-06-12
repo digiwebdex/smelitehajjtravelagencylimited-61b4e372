@@ -7,10 +7,12 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SiteSettingsProvider } from "@/hooks/useSiteSettings";
 import { lazy, Suspense } from "react";
-import AnalyticsTracker from "@/components/AnalyticsTracker";
-import FacebookPixel from "@/components/FacebookPixel";
-import DynamicSEOHead from "@/components/DynamicSEOHead";
 import Index from "./pages/Index";
+
+// Analytics/SEO — lazy so they never compete with homepage LCP
+const AnalyticsTracker = lazy(() => import("@/components/AnalyticsTracker"));
+const FacebookPixel = lazy(() => import("@/components/FacebookPixel"));
+const DynamicSEOHead = lazy(() => import("@/components/DynamicSEOHead"));
 
 // Route-level code splitting — keeps initial bundle small
 const Auth = lazy(() => import("./pages/Auth"));
@@ -54,9 +56,11 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <AnalyticsTracker />
-              <FacebookPixel />
-              <DynamicSEOHead />
+              <Suspense fallback={null}>
+                <AnalyticsTracker />
+                <FacebookPixel />
+                <DynamicSEOHead />
+              </Suspense>
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
                   <Route path="/" element={<Index />} />

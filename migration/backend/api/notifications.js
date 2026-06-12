@@ -2,6 +2,7 @@ const express = require('express');
 const nodemailer = require('nodemailer');
 const router = express.Router();
 const { Pool } = require('pg');
+const { requireAdmin, requireAdminOrValidBooking } = require('../middleware/access');
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -47,7 +48,7 @@ async function sendEmail(config, to, subject, html) {
 }
 
 // POST /api/notifications/send-booking
-router.post('/send-booking', async (req, res) => {
+router.post('/send-booking', requireAdminOrValidBooking, async (req, res) => {
   try {
     const { bookingId, notificationType = 'booking_confirmed', rejectionReason } = req.body;
 
@@ -113,7 +114,7 @@ router.post('/send-booking', async (req, res) => {
 });
 
 // POST /api/notifications/send-air-ticket
-router.post('/send-air-ticket', async (req, res) => {
+router.post('/send-air-ticket', requireAdmin, async (req, res) => {
   try {
     const { bookingId, notificationType } = req.body;
     // Similar logic for air ticket notifications
@@ -124,7 +125,7 @@ router.post('/send-air-ticket', async (req, res) => {
 });
 
 // POST /api/notifications/send-visa
-router.post('/send-visa', async (req, res) => {
+router.post('/send-visa', requireAdmin, async (req, res) => {
   try {
     const { applicationId, notificationType } = req.body;
     res.json({ success: true });
@@ -134,7 +135,7 @@ router.post('/send-visa', async (req, res) => {
 });
 
 // POST /api/notifications/send-tracking
-router.post('/send-tracking', async (req, res) => {
+router.post('/send-tracking', requireAdmin, async (req, res) => {
   try {
     const { bookingId, newStatus } = req.body;
     res.json({ success: true });
@@ -144,7 +145,7 @@ router.post('/send-tracking', async (req, res) => {
 });
 
 // POST /api/notifications/send-whatsapp-test
-router.post('/send-whatsapp-test', async (req, res) => {
+router.post('/send-whatsapp-test', requireAdmin, async (req, res) => {
   try {
     const { phone, message } = req.body;
     // WhatsApp Business API logic

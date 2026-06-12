@@ -303,3 +303,62 @@
 .animate-slide-out-left {
   animation: slide-out-left 700ms ease-out forwards;
 }
+
+/* === SM Elite Hajj: safe responsive guard only === */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  main {
+    width: 100%;
+    max-width: 100vw;
+  }
+}
+
+
+/* === SM Elite Hajj: hero slide text center only === */
+section [class*="Hero"],
+[class*="hero"] h1,
+[class*="hero"] h2,
+[class*="hero"] p,
+[class*="Hero"] h1,
+[class*="Hero"] h2,
+[class*="Hero"] p {
+  text-align: center !important;
+}
+
+[class*="hero"] h1,
+[class*="hero"] h2,
+[class*="hero"] p,
+[class*="Hero"] h1,
+[class*="Hero"] h2,
+[class*="Hero"] p {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+[class*="hero"] [class*="max-w"],
+[class*="Hero"] [class*="max-w"] {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+[class*="hero"] [class*="justify-start"],
+[class*="Hero"] [class*="justify-start"] {
+  justify-content: center !important;
+}
+
+[class*="hero"] [class*="items-start"],
+[class*="Hero"] [class*="items-start"] {
+  align-items: center !important;
+}

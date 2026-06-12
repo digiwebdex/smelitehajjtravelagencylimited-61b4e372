@@ -1,11 +1,35 @@
+/* CMS allowed REST tables: frontend_sections, frontend_section_items, frontend_cms_history */
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const path = require('path');
+const {
+  optionalAuth,
+  requireAdmin,
+  enforceRestAccess,
+  enforceFunctionAccess,
+  sanitizeTableRows,
+  isPublicUploadBucket,
+  isAdmin,
+  loadUserRole,
+} = require('./middleware/access');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+if (process.env.NODE_ENV === 'production') {
+  const secret = process.env.JWT_SECRET || '';
+  if (!secret || secret === 'your-super-secret-key-change-this') {
+    console.error('FATAL: Set a strong JWT_SECRET in production');
+    process.exit(1);
+  }
+}
+
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'https://smelitehajj.com,https://www.smelitehajj.com')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 // Database connection pool
 const pool = new Pool({
@@ -23,8 +47,17 @@ const pool = new Pool({
 module.exports.pool = pool;
 
 // Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || CORS_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files
@@ -40,180 +73,446 @@ app.get('/api/health', (req, res) => {
 // ============================================================
 
 // GET /api/rest/:table - Select rows with filters
-app.get('/api/rest/:table', async (req, res) => {
-  try {
-    const { table } = req.params;
-    const { select, order, limit, offset, ...filters } = req.query;
 
-    let columns = select || '*';
-    let query = `SELECT ${columns} FROM public."${table}"`;
-    const values = [];
-    const conditions = [];
+// Patched Supabase-compatible REST GET endpoint
+const __restGetColumnsCache = new Map();
 
-    // Parse filters (eq, neq, gt, lt, like, in, is)
-    Object.entries(filters).forEach(([key, value]) => {
-      if (key.endsWith('.eq')) {
-        const col = key.replace('.eq', '');
-        values.push(value);
-        conditions.push(`"${col}" = $${values.length}`);
-      } else if (key.endsWith('.neq')) {
-        const col = key.replace('.neq', '');
-        values.push(value);
-        conditions.push(`"${col}" != $${values.length}`);
-      } else if (key.endsWith('.is')) {
-        const col = key.replace('.is', '');
-        conditions.push(`"${col}" IS ${value === 'null' ? 'NULL' : 'NOT NULL'}`);
-      } else if (key.endsWith('.in')) {
-        const col = key.replace('.in', '');
-        const items = value.replace(/[()]/g, '').split(',');
-        const placeholders = items.map((_, i) => `$${values.length + i + 1}`);
-        values.push(...items);
-        conditions.push(`"${col}" IN (${placeholders.join(',')})`);
-      } else {
-        // Default eq
-        values.push(value);
-        conditions.push(`"${key}" = $${values.length}`);
-      }
+async function __restGetTableColumns(table) {
+  if (__restGetColumnsCache.has(table)) return __restGetColumnsCache.get(table);
+
+  const result = await pool.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [table]
+  );
+
+  const cols = new Set(result.rows.map(r => r.column_name));
+  __restGetColumnsCache.set(table, cols);
+  return cols;
+}
+
+function __restQuoteIdent(name) {
+  return '"' + String(name).replace(/"/g, '""') + '"';
+}
+
+
+function __smeLooksLikeUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function __restIsAllowedTable(table) {
+  // Allow existing-style public app tables requested by the admin/frontend.
+  // SQL injection is still blocked because table names must be valid identifiers
+  // and all SQL uses quoted identifiers.
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(String(table || ''))) {
+    return false;
+  }
+
+  // Keep dangerous/internal names blocked.
+  const blocked = new Set([
+    'pg_stat_statements',
+    'pg_user',
+    'pg_shadow',
+    'information_schema',
+    'schema_migrations'
+  ]);
+
+  return !blocked.has(table);
+}
+
+function __restParseFilter(rawValue) {
+  if (typeof rawValue !== 'string') {
+    return { op: 'eq', value: rawValue };
+  }
+
+  const idx = rawValue.indexOf('.');
+  if (idx === -1) {
+    return { op: 'eq', value: rawValue };
+  }
+
+  const op = rawValue.slice(0, idx);
+  const value = rawValue.slice(idx + 1);
+  const allowedOps = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in']);
+
+  if (!allowedOps.has(op)) {
+    return { op: 'eq', value: rawValue };
+  }
+
+  return { op, value };
+}
+
+function __restBuildCondition(col, rawValue, params, columns) {
+  if (!columns.has(col)) return null;
+
+  const parsed = __restParseFilter(rawValue);
+  const op = parsed.op;
+  const value = parsed.value;
+
+  if (op === 'is') {
+    if (String(value).toLowerCase() === 'null') {
+      return `${__restQuoteIdent(col)} IS NULL`;
+    }
+    if (String(value).toLowerCase() === 'not.null') {
+      return `${__restQuoteIdent(col)} IS NOT NULL`;
+    }
+    return null;
+  }
+
+  if (op === 'in') {
+    let values = String(value).trim();
+    values = values.replace(/^\(/, '').replace(/\)$/, '');
+    const list = values.split(',').map(v => v.trim()).filter(Boolean);
+
+    if (list.length === 0) return null;
+
+    const placeholders = list.map(v => {
+      params.push(v);
+      return `$${params.length}`;
     });
 
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
+    return `${__restQuoteIdent(col)} IN (${placeholders.join(', ')})`;
+  }
+
+  params.push(value);
+  const ph = `$${params.length}`;
+
+  switch (op) {
+    case 'eq':
+      return `${__restQuoteIdent(col)} = ${ph}`;
+    case 'neq':
+      return `${__restQuoteIdent(col)} <> ${ph}`;
+    case 'gt':
+      return `${__restQuoteIdent(col)} > ${ph}`;
+    case 'gte':
+      return `${__restQuoteIdent(col)} >= ${ph}`;
+    case 'lt':
+      return `${__restQuoteIdent(col)} < ${ph}`;
+    case 'lte':
+      return `${__restQuoteIdent(col)} <= ${ph}`;
+    case 'like':
+      return `${__restQuoteIdent(col)} LIKE ${ph}`;
+    case 'ilike':
+      return `${__restQuoteIdent(col)} ILIKE ${ph}`;
+    default:
+      return `${__restQuoteIdent(col)} = ${ph}`;
+  }
+}
+
+function __restBuildOrCondition(orValue, params, columns) {
+  let value = String(orValue || '').trim();
+  value = value.replace(/^\(/, '').replace(/\)$/, '');
+
+  if (!value) return null;
+
+  const parts = value.split(',').map(x => x.trim()).filter(Boolean);
+  const conditions = [];
+
+  for (const part of parts) {
+    const bits = part.split('.');
+    if (bits.length < 3) continue;
+
+    const col = bits[0];
+    const op = bits[1];
+    const rest = bits.slice(2).join('.');
+
+    const condition = __restBuildCondition(col, `${op}.${rest}`, params, columns);
+    if (condition) conditions.push(condition);
+  }
+
+  if (conditions.length === 0) return null;
+  return '(' + conditions.join(' OR ') + ')';
+}
+
+function __restParseOrder(orderRaw, columns) {
+  if (!orderRaw) return '';
+
+  const parts = String(orderRaw).split(',').map(x => x.trim()).filter(Boolean);
+  const out = [];
+
+  for (const part of parts) {
+    const bits = part.split('.');
+    const col = bits[0];
+
+    if (!columns.has(col)) continue;
+
+    let sql = __restQuoteIdent(col);
+    sql += bits.includes('desc') ? ' DESC' : ' ASC';
+
+    if (bits.includes('nullsfirst')) sql += ' NULLS FIRST';
+    if (bits.includes('nullslast')) sql += ' NULLS LAST';
+
+    out.push(sql);
+  }
+
+  return out.length ? ` ORDER BY ${out.join(', ')}` : '';
+}
+
+function __restParseSelect(selectRaw, columns) {
+  if (!selectRaw || selectRaw === '*') return '*';
+
+  const raw = String(selectRaw);
+
+  // Relationship select like packages(...), profiles(...), etc.
+  // Generic backend cannot join like Supabase, so safely return *.
+  if (raw.includes('(') || raw.includes(')')) return '*';
+
+  const requested = raw
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean)
+    .filter(col => columns.has(col));
+
+  if (requested.length === 0) return '*';
+
+  return requested.map(__restQuoteIdent).join(', ');
+}
+
+app.get('/api/rest/:table', optionalAuth, async (req, res) => {
+  try {
+    const { table } = req.params;
+
+    if (!__restIsAllowedTable(table)) {
+      return res.status(403).json({ error: 'Table not allowed' });
     }
 
-    if (order) {
-      const parts = order.split('.');
-      const col = parts[0];
-      const dir = parts[1] === 'desc' ? 'DESC' : 'ASC';
-      query += ` ORDER BY "${col}" ${dir}`;
+    if (!(await enforceRestAccess(req, res, table, 'GET'))) return;
+
+    const columns = await __restGetTableColumns(table);
+
+    if (!columns || columns.size === 0) {
+      return res.status(404).json({ error: 'Table not found' });
     }
 
-    if (limit) query += ` LIMIT ${parseInt(limit)}`;
-    if (offset) query += ` OFFSET ${parseInt(offset)}`;
+    const params = [];
+    const where = [];
 
-    const result = await pool.query(query, values);
-    res.json(result.rows);
+    for (const [key, value] of Object.entries(req.query)) {
+      if (['select', 'order', 'limit', 'offset'].includes(key)) continue;
+
+      if (key === 'or') {
+        const condition = __restBuildOrCondition(value, params, columns);
+        if (condition) where.push(condition);
+        continue;
+      }
+
+      // Supports created_at.gte=2026-01-01
+      if (key.includes('.')) {
+        const [col, op] = key.split('.', 2);
+        const condition = __restBuildCondition(col, `${op}.${value}`, params, columns);
+        if (condition) where.push(condition);
+        continue;
+      }
+
+      // Supports created_at=gte.2026-01-01 and is_active=eq.true
+      const condition = __restBuildCondition(key, value, params, columns);
+      if (condition) where.push(condition);
+    }
+
+    const safeSelectColumns = new Set(columns);
+    if (table === 'users') safeSelectColumns.delete('encrypted_password');
+    const selectSql = __restParseSelect(req.query.select, safeSelectColumns);
+    const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+    const orderSql = __restParseOrder(req.query.order, columns);
+
+    let limitSql = '';
+    if (req.query.limit && /^\d+$/.test(String(req.query.limit))) {
+      limitSql = ` LIMIT ${Math.min(parseInt(req.query.limit, 10), 1000)}`;
+    }
+
+    let offsetSql = '';
+    if (req.query.offset && /^\d+$/.test(String(req.query.offset))) {
+      offsetSql = ` OFFSET ${parseInt(req.query.offset, 10)}`;
+    }
+
+    const sql = `SELECT ${selectSql} FROM public.${__restQuoteIdent(table)}${whereSql}${orderSql}${limitSql}${offsetSql}`;
+    const result = await pool.query(sql, params);
+    const role = await loadUserRole(req);
+
+    res.json(sanitizeTableRows(table, result.rows, isAdmin(role)));
   } catch (error) {
     console.error('GET error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed' });
   }
 });
+
 
 // POST /api/rest/:table - Insert row(s) / Upsert
-app.post('/api/rest/:table', async (req, res) => {
+
+app.post('/api/rest/:table', optionalAuth, async (req, res) => {
   try {
     const { table } = req.params;
-    let rawData = req.body;
-    
-    // Handle upsert flag
-    const isUpsert = rawData?._upsert === true;
-    if (isUpsert) {
-      delete rawData._upsert;
-    }
-    
-    const data = Array.isArray(rawData) ? rawData : [rawData];
-    const results = [];
-    
-    for (const row of data) {
-      const columns = Object.keys(row);
-      const values = Object.values(row);
-      const placeholders = values.map((_, i) => `$${i + 1}`);
 
-      let query;
-      if (isUpsert && row.id) {
-        // Upsert: INSERT ... ON CONFLICT (id) DO UPDATE
-        const updateClauses = columns.filter(c => c !== 'id').map((c, i) => `"${c}" = EXCLUDED."${c}"`);
-        query = `INSERT INTO public."${table}" (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders.join(',')}) ON CONFLICT (id) DO UPDATE SET ${updateClauses.join(', ')} RETURNING *`;
-      } else if (isUpsert) {
-        // Upsert without id - try insert, handle conflict gracefully
-        query = `INSERT INTO public."${table}" (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders.join(',')}) ON CONFLICT DO NOTHING RETURNING *`;
-      } else {
-        query = `INSERT INTO public."${table}" (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders.join(',')}) RETURNING *`;
+    if (!__restIsAllowedTable(table)) {
+      return res.status(403).json({ error: 'Table not allowed' });
+    }
+
+    if (!(await enforceRestAccess(req, res, table, 'POST'))) return;
+
+    const columns = await __restGetTableColumns(table);
+
+    if (!columns || columns.size === 0) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+
+    const rowsToInsert = Array.isArray(req.body) ? req.body : [req.body];
+
+    if (!rowsToInsert.length || !rowsToInsert[0] || typeof rowsToInsert[0] !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
+    const insertedRows = [];
+
+    for (const inputRow of rowsToInsert) {
+      const allowedEntries = Object.entries(inputRow || {}).filter(([key]) => columns.has(key));
+
+      if (allowedEntries.length === 0) {
+        return res.status(400).json({
+          error: 'No valid columns provided',
+          valid_columns: Array.from(columns).sort()
+        });
       }
-      
-      const result = await pool.query(query, values);
-      results.push(result.rows[0]);
+
+      const keys = allowedEntries.map(([key]) => key);
+      const values = allowedEntries.map(([, value]) => value);
+
+      const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+      const cols = keys.map(__restQuoteIdent).join(', ');
+
+      const sql = `INSERT INTO public.${__restQuoteIdent(table)} (${cols}) VALUES (${placeholders}) RETURNING *`;
+      const result = await pool.query(sql, values);
+
+      insertedRows.push(result.rows[0]);
     }
 
-    res.status(201).json(results.length === 1 ? results[0] : results);
+    res.status(201).json(Array.isArray(req.body) ? insertedRows : insertedRows[0]);
   } catch (error) {
     console.error('POST error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed' });
   }
 });
 
+
 // PATCH /api/rest/:table - Update rows
-app.patch('/api/rest/:table', async (req, res) => {
+
+app.patch('/api/rest/:table', optionalAuth, async (req, res) => {
   try {
     const { table } = req.params;
-    const { ...filters } = req.query;
-    const updates = req.body;
 
-    const setClauses = [];
-    const values = [];
-
-    Object.entries(updates).forEach(([key, value]) => {
-      values.push(value);
-      setClauses.push(`"${key}" = $${values.length}`);
-    });
-
-    let query = `UPDATE public."${table}" SET ${setClauses.join(', ')}`;
-    const conditions = [];
-
-    Object.entries(filters).forEach(([key, value]) => {
-      if (key.endsWith('.eq')) {
-        const col = key.replace('.eq', '');
-        values.push(value);
-        conditions.push(`"${col}" = $${values.length}`);
-      }
-    });
-
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
+    if (!__restIsAllowedTable(table)) {
+      return res.status(403).json({ error: 'Table not allowed' });
     }
 
-    query += ' RETURNING *';
-    const result = await pool.query(query, values);
+    if (!(await enforceRestAccess(req, res, table, 'PATCH'))) return;
+
+    const columns = await __restGetTableColumns(table);
+
+    if (!columns || columns.size === 0) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+
+    const params = [];
+    const where = [];
+
+    for (const [key, value] of Object.entries(req.query)) {
+      if (['select', 'order', 'limit', 'offset'].includes(key)) continue;
+
+      if (key.includes('.')) {
+        const [col, op] = key.split('.', 2);
+        const condition = __restBuildCondition(col, `${op}.${value}`, params, columns);
+        if (condition) where.push(condition);
+        continue;
+      }
+
+      const condition = __restBuildCondition(key, value, params, columns);
+      if (condition) where.push(condition);
+    }
+
+    if (where.length === 0) {
+      return res.status(400).json({ error: 'PATCH requires a valid filter' });
+    }
+
+    const allowedEntries = Object.entries(req.body || {}).filter(([key]) => columns.has(key));
+
+    if (allowedEntries.length === 0) {
+      return res.status(400).json({ error: 'No valid columns provided' });
+    }
+
+    const setParts = [];
+
+    for (const [key, value] of allowedEntries) {
+      params.push(value);
+      setParts.push(`${__restQuoteIdent(key)} = $${params.length}`);
+    }
+
+    const sql = `UPDATE public.${__restQuoteIdent(table)} SET ${setParts.join(', ')} WHERE ${where.join(' AND ')} RETURNING *`;
+    const result = await pool.query(sql, params);
+
     res.json(result.rows);
   } catch (error) {
     console.error('PATCH error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed' });
   }
 });
 
+
 // DELETE /api/rest/:table - Delete rows
-app.delete('/api/rest/:table', async (req, res) => {
+
+app.delete('/api/rest/:table', optionalAuth, async (req, res) => {
   try {
     const { table } = req.params;
-    const { ...filters } = req.query;
-    const values = [];
-    const conditions = [];
 
-    Object.entries(filters).forEach(([key, value]) => {
-      if (key.endsWith('.eq')) {
-        const col = key.replace('.eq', '');
-        values.push(value);
-        conditions.push(`"${col}" = $${values.length}`);
-      }
-    });
-
-    let query = `DELETE FROM public."${table}"`;
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
+    if (!__restIsAllowedTable(table)) {
+      return res.status(403).json({ error: 'Table not allowed' });
     }
 
-    query += ' RETURNING *';
-    const result = await pool.query(query, values);
+    if (!(await enforceRestAccess(req, res, table, 'DELETE'))) return;
+
+    const columns = await __restGetTableColumns(table);
+
+    if (!columns || columns.size === 0) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+
+    const params = [];
+    const where = [];
+
+    for (const [key, value] of Object.entries(req.query)) {
+      if (['select', 'order', 'limit', 'offset'].includes(key)) continue;
+
+      if (key.includes('.')) {
+        const [col, op] = key.split('.', 2);
+        const condition = __restBuildCondition(col, `${op}.${value}`, params, columns);
+        if (condition) where.push(condition);
+        continue;
+      }
+
+      const condition = __restBuildCondition(key, value, params, columns);
+      if (condition) where.push(condition);
+    }
+
+    if (where.length === 0) {
+      return res.status(400).json({ error: 'DELETE requires a valid filter' });
+    }
+
+    const sql = `DELETE FROM public.${__restQuoteIdent(table)} WHERE ${where.join(' AND ')} RETURNING *`;
+    const result = await pool.query(sql, params);
+
     res.json(result.rows);
   } catch (error) {
     console.error('DELETE error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed' });
   }
 });
 
-// RPC endpoint (call database functions)
-app.post('/api/rpc/:functionName', async (req, res) => {
+
+// RPC endpoint (call database functions) — admin only
+app.post('/api/rpc/:functionName', requireAdmin, async (req, res) => {
   try {
     const { functionName } = req.params;
+
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(functionName)) {
+      return res.status(400).json({ error: 'Invalid function name' });
+    }
     const params = req.body;
     const paramKeys = Object.keys(params);
     
@@ -231,7 +530,7 @@ app.post('/api/rpc/:functionName', async (req, res) => {
     }
   } catch (error) {
     console.error('RPC error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Request failed' });
   }
 });
 
@@ -258,23 +557,27 @@ app.use('/api/backup-restore', backupRoutes);
 
 // Functions proxy - replaces Supabase Edge Functions
 // Maps supabase.functions.invoke('name') -> /api/functions/name
-app.post('/api/functions/:name', async (req, res) => {
+app.post('/api/functions/:name', optionalAuth, async (req, res) => {
   const { name } = req.params;
+
+  if (!(await enforceFunctionAccess(req, res, name))) return;
+
   const routeMap = {
     'payment-sslcommerz': '/api/payment-sslcommerz',
     'payment-bkash': '/api/payment-bkash',
     'payment-nagad': '/api/payment-nagad',
-    'backup-restore': '/api/backup-restore',
-    'send-booking-notification': '/api/notifications/booking',
-    'send-air-ticket-notification': '/api/notifications/air-ticket',
-    'send-visa-notification': '/api/notifications/visa',
-    'send-emi-notification': '/api/notifications/emi',
-    'send-tracking-notification': '/api/notifications/tracking',
-    'send-welcome-notification': '/api/notifications/welcome',
-    'send-whatsapp-test': '/api/notifications/whatsapp-test',
-    'emi-reminder': '/api/notifications/emi-reminder',
-    'fb-event': '/api/notifications/fb-event',
-    'create-guest-account': '/api/auth/create-guest',
+    'payment-installment': '/api/payment-sslcommerz',
+    'backup-restore': '/api/backup-restore/backup',
+    'send-booking-notification': '/api/notifications/send-booking',
+    'send-air-ticket-notification': '/api/notifications/send-air-ticket',
+    'send-visa-notification': '/api/notifications/send-visa',
+    'send-emi-notification': '/api/notifications/send-booking',
+    'send-tracking-notification': '/api/notifications/send-tracking',
+    'send-welcome-notification': '/api/notifications/send-booking',
+    'send-whatsapp-test': '/api/notifications/send-whatsapp-test',
+    'emi-reminder': '/api/notifications/send-booking',
+    'fb-event': '/api/notifications/send-booking',
+    'create-guest-account': '/api/auth/signup',
     'create-demo-user': '/api/admin-users/create-demo',
     'create-admin-user': '/api/admin-users/create-admin',
     'create-staff-user': '/api/admin-users/create-staff',
@@ -282,29 +585,38 @@ app.post('/api/functions/:name', async (req, res) => {
   };
 
   const targetRoute = routeMap[name];
-  if (targetRoute) {
-    // Forward the request internally
-    try {
-      // Re-route internally by making a local fetch
-      const targetUrl = `http://127.0.0.1:${PORT}${targetRoute}`;
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}),
-        },
-        body: JSON.stringify(req.body),
-      });
-      const data = await response.json().catch(() => ({}));
-      res.status(response.status).json(data);
-    } catch (error) {
-      console.error(`Functions proxy error for ${name}:`, error);
-      res.status(500).json({ error: `Function ${name} failed: ${error.message}` });
-    }
-  } else {
-    // Unknown function - return stub success
+  if (!targetRoute) {
     console.warn(`Unknown function called: ${name}`);
-    res.json({ success: true, message: `Function ${name} not implemented on VPS` });
+    return res.status(404).json({ error: `Function ${name} not found` });
+  }
+
+  try {
+    let targetUrl = `http://127.0.0.1:${PORT}${targetRoute}`;
+
+    if (['payment-sslcommerz', 'payment-bkash', 'payment-nagad', 'payment-installment'].includes(name)) {
+      const action = req.body?.action || 'initiate';
+      targetUrl = `http://127.0.0.1:${PORT}${routeMap[name]}/${action}`;
+    }
+
+    if (name === 'backup-restore') {
+      const action = req.body?.action;
+      if (action === 'restore_backup') targetUrl = `http://127.0.0.1:${PORT}/api/backup-restore/restore`;
+      else targetUrl = `http://127.0.0.1:${PORT}/api/backup-restore/backup`;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}),
+      },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json().catch(() => ({}));
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error(`Functions proxy error for ${name}:`, error);
+    res.status(500).json({ error: 'Function request failed' });
   }
 });
 
@@ -325,9 +637,15 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 15 * 1024 * 1024 } });
 
-app.post('/api/storage/:bucket/upload', upload.single('file'), (req, res) => {
+function uploadAuth(req, res, next) {
+  const bucket = req.params.bucket || req.body?.bucket;
+  if (isPublicUploadBucket(bucket)) return next();
+  return requireAdmin(req, res, next);
+}
+
+app.post('/api/storage/:bucket/upload', uploadAuth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   
   const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.params.bucket}/${req.file.filename}`;
@@ -340,7 +658,142 @@ app.post('/api/storage/:bucket/upload', upload.single('file'), (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+
+// === VPS REAL FILE UPLOAD ENDPOINT ===
+const __vpsFs = require('fs');
+const __vpsPath = require('path');
+const __vpsMulter = require('multer');
+
+const __vpsUploadRoot = __vpsPath.join(__dirname, 'uploads');
+__vpsFs.mkdirSync(__vpsUploadRoot, { recursive: true });
+
+function __vpsSafePart(value, fallback) {
+  return String(value || fallback || 'misc')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/\.+/g, '.')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || fallback || 'misc';
+}
+
+const __vpsStorage = __vpsMulter.diskStorage({
+  destination: function (req, file, cb) {
+    const bucket = __vpsSafePart(req.params.bucket || req.body.bucket || 'misc', 'misc');
+    const dir = __vpsPath.join(__vpsUploadRoot, bucket);
+    __vpsFs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const ext = (__vpsPath.extname(file.originalname || '') || '.webp').toLowerCase();
+    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, name);
+  }
+});
+
+const __vpsUploader = __vpsMulter({
+  storage: __vpsStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    const ok = /^image\/(jpeg|jpg|png|webp|gif|svg\+xml)$/.test(file.mimetype || '');
+    cb(ok ? null : new Error('Only image uploads are allowed'), ok);
+  }
+});
+
+app.post(['/api/upload/:bucket', '/api/storage/upload/:bucket', '/upload/:bucket'], uploadAuth, __vpsUploader.single('file'), function (req, res) {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const bucket = __vpsSafePart(req.params.bucket || req.body.bucket || 'misc', 'misc');
+  const url = `/uploads/${bucket}/${req.file.filename}`;
+
+  res.json({
+    path: url,
+    url,
+    publicUrl: url,
+    filename: req.file.filename,
+    bucket
+  });
+});
+
+
+
+// === VPS NESTED FILE UPLOAD ENDPOINT FOR ADMIN UPLOADS ===
+const __nestedFs = require('fs');
+const __nestedPath = require('path');
+const __nestedMulter = require('multer');
+
+function __nestedSafePart(value, fallback) {
+  return String(value || fallback || 'file')
+    .replace(/\\/g, '/')
+    .split('/')
+    .map(part => part.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/\.+/g, '.').replace(/^-+|-+$/g, ''))
+    .filter(Boolean)
+    .join('/');
+}
+
+function __nestedSafeName(value, fallback) {
+  return String(value || fallback || 'file.webp')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/\.+/g, '.')
+    .replace(/^-+|-+$/g, '') || fallback || 'file.webp';
+}
+
+const __nestedUpload = __nestedMulter({
+  storage: __nestedMulter.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    const ok = /^image\/(jpeg|jpg|png|webp|gif|svg\+xml)$/.test(file.mimetype || '');
+    cb(ok ? null : new Error('Only image uploads are allowed'), ok);
+  }
+});
+
+app.post(['/api/vps-upload/:bucket', '/vps-upload/:bucket'], uploadAuth, __nestedUpload.single('file'), function (req, res) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const bucket = __nestedSafeName(req.params.bucket || req.body.bucket || 'admin-uploads', 'admin-uploads');
+
+    let requestedPath = String(req.body.path || req.query.path || req.file.originalname || '');
+    requestedPath = requestedPath.replace(/^\/+/, '').replace(/^uploads\//, '').replace(new RegExp('^' + bucket + '/'), '');
+
+    if (!requestedPath || requestedPath === 'undefined' || requestedPath === 'null') {
+      const ext = (__nestedPath.extname(req.file.originalname || '') || '.webp').toLowerCase();
+      requestedPath = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    }
+
+    const safePath = __nestedSafePart(requestedPath, `file-${Date.now()}.webp`);
+    const parts = safePath.split('/');
+    const filename = __nestedSafeName(parts.pop(), `file-${Date.now()}.webp`);
+    const subdir = parts.join('/');
+
+    const uploadRoot = __nestedPath.join(__dirname, 'uploads');
+    const targetDir = __nestedPath.join(uploadRoot, bucket, subdir);
+    __nestedFs.mkdirSync(targetDir, { recursive: true });
+
+    const targetFile = __nestedPath.join(targetDir, filename);
+    __nestedFs.writeFileSync(targetFile, req.file.buffer);
+
+    const relativePath = subdir ? `${subdir}/${filename}` : filename;
+    const url = `/uploads/${bucket}/${relativePath}`;
+
+    res.json({
+      path: relativePath,
+      fullPath: `${bucket}/${relativePath}`,
+      url,
+      publicUrl: url,
+      bucket,
+      filename
+    });
+  } catch (error) {
+    console.error('VPS upload error:', error);
+    res.status(500).json({ error: error.message || 'Upload failed' });
+  }
+});
+
+
+app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
   console.log(`SM Elite Hajj Backend running on port ${PORT}`);
   console.log(`API: http://localhost:${PORT}/api`);
 });
