@@ -147,8 +147,6 @@ const TeamSection = () => {
                     whileHover={{ y: -10 }}
                     className="group relative"
                   >
-                    {/* Outer gold gradient frame */}
-                    <div className="absolute -inset-0.5 bg-gradient-to-br from-secondary via-secondary/40 to-secondary rounded-3xl opacity-70 group-hover:opacity-100 blur-sm group-hover:blur transition-all duration-500" />
                     
                     {/* Card */}
                     <div className="relative bg-gradient-to-br from-card via-card to-primary/5 rounded-3xl overflow-hidden shadow-elegant group-hover:shadow-2xl transition-all duration-500 flex flex-col sm:flex-row border border-secondary/20">
